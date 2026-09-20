@@ -1,0 +1,65 @@
+{
+  "total_expected_runs": 459,
+  "total_processed_runs": 459,
+  "total_nan_or_inf_detected": 0,
+  "total_clipped_signals": 0,
+  "total_dead_sensors": 0,
+  "sample_rate_hz": 1000.0,
+  "samples_per_run": 10000,
+  "conditions_processed": [
+    {
+      "condition": "Data 70-H-0",
+      "runs": 51,
+      "pretension_n": 70,
+      "fault_code": "NORMAL"
+    },
+    {
+      "condition": "Data 70-F-0",
+      "runs": 51,
+      "pretension_n": 70,
+      "fault_code": "FAULTY_BELT"
+    },
+    {
+      "condition": "Data 70-H-U",
+      "runs": 51,
+      "pretension_n": 70,
+      "fault_code": "UNBALANCED"
+    },
+    {
+      "condition": "Data 110-H-0",
+      "runs": 51,
+      "pretension_n": 110,
+      "fault_code": "NORMAL"
+    },
+    {
+      "condition": "Data 110-F-0",
+      "runs": 51,
+      "pretension_n": 110,
+      "fault_code": "FAULTY_BELT"
+    },
+    {
+      "condition": "Data 110-H-U",
+      "runs": 51,
+      "pretension_n": 110,
+      "fault_code": "UNBALANCED"
+    },
+    {
+      "condition": "Data 150-H-0",
+      "runs": 51,
+      "pretension_n": 150,
+      "fault_code": "NORMAL"
+    },
+    {
+      "condition": "Data 150-F-0",
+      "runs": 51,
+      "pretension_n": 150,
+      "fault_code": "FAULTY_BELT"
+    },
+    {
+      "condition": "Data 150-H-U",
+      "runs": 51,
+      "pretension_n": 150,
+      "fault_code": "UNBALANCED"
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "provenance_version": "1.0.0",
+  "dataset_identity": {
+    "dataset_name": "mendeley_belt_drive",
+    "title": "Experimental vibration data collected for a belt drive system under different operating conditions",
+    "doi": "10.17632/jf8v2ndydr.1",
+    "source_type": "RESEARCH",
+    "source_url": "https://data.mendeley.com/datasets/jf8v2ndydr/1",
+    "license": "CC BY 4.0 (Creative Commons Attribution 4.0 International)",
+    "publication_date": "2022-05-16",
+    "authors": [
+      {"name": "Ramy Khalifa", "affiliation": "Ecole Polytechnique de Montreal"},
+      {"name": "Soumaya Yacout", "affiliation": "Ecole Polytechnique de Montreal"},
+      {"name": "Samuel Bassetto", "affiliation": "Ecole Polytechnique de Montreal"},
+      {"name": "Yasser Shaban", "affiliation": "Helwan University"}
+    ],
+    "associated_publication": "Data in Brief (2023), DOI: 10.1016/j.dib.2023.109156"
+  },
+  "scientific_domain_limitations": {
+    "is_conveyor_joint_rupture_data": false,
+    "disclaimer": "This dataset was collected from an experimental laboratory belt-drive test bench (G.U.N.T PT 500.14) under varying rotational speeds, belt pretension levels, and fault/unbalance states. It is NOT equivalent to conveyor belt joint rupture or splice pull-out data in an iron-ore mining environment. It is scientifically valid for vibration signal preprocessing, zero-mean calibration, baseline operational modeling, DSP feature extraction, and general belt anomaly detection.",
+    "authorized_uses": [
+      "Vibration signal preprocessing and DC offset removal validation",
+      "DSP feature extraction validation (RMS, crest factor, kurtosis, FFT spectrum)",
+      "Operating condition representation (speed vs pretension baseline drift)",
+      "Unsupervised anomaly detection & vibration-health indicators",
+      "End-to-end pipeline verification before field hardware connection"
+    ],
+    "prohibited_claims": [
+      "Claiming the model is trained on real industrial conveyor splice rupture data",
+      "Claiming ISO conveyor belt compliance solely based on this test bench data"
+    ]
+  },
+  "acquisition_specifications": {
+    "machine_type": "G.U.N.T PT 500.14 Belt Drive Machinery Diagnostic System",
+    "sensors": [
+      {
+        "channel_id": 1,
+        "sensor_type": "Piezoelectric Accelerometer",
+        "location": "Driver pulley bearing housing",
+        "physical_unit": "g (acceleration)"
+      },
+      {
+        "channel_id": 2,
+        "sensor_type": "Piezoelectric Accelerometer",
+        "location": "Driven pulley bearing housing",
+        "physical_unit": "g (acceleration)"
+      }
+    ],
+    "sampling_rate_hz": 1000.0,
+    "sample_count_per_run": 10000,
+    "duration_seconds_per_run": 10.0,
+    "total_experimental_runs": 459
+  },
+  "operating_conditions_matrix": {
+    "rotational_speeds_rpm": [400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000],
+    "speed_levels_count": 17,
+    "pretension_levels_n": [70, 110, 150],
+    "condition_classes": [
+      {"code": "NORMAL", "description": "Healthy belt without unbalance load"},
+      {"code": "FAULTY_BELT", "description": "Damaged / faulty belt under test"},
+      {"code": "UNBALANCED", "description": "Healthy belt with eccentric unbalance weight (2.2g - 8.8g)"}
+    ],
+    "repetitions_per_condition": 3
+  },
+  "storage_locations": {
+    "raw_files": "data/raw/research/mendeley_belt_drive/",
+    "processed_features": "data/processed/research/mendeley_belt_drive/cleaned_belt_drive_features.csv",
+    "sample_signals": "data/processed/research/mendeley_belt_drive/sample_cleaned_vibration_signals.csv",
+    "audit_report": "data/processed/research/mendeley_belt_drive/data_cleaning_report.json"
+  }
+}

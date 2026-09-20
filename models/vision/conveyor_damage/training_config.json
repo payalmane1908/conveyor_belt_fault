@@ -1,0 +1,20 @@
+{
+  "model_version": "conveyor-damage-detector-v1",
+  "model_architecture": "yolov8n.pt",
+  "dataset_yaml": "data/processed/research/conveyor_belt_damage_vision/yolo_dataset/conveyor_damage.yaml",
+  "epochs": 3,
+  "imgsz": 416,
+  "batch_size": 8,
+  "initial_lr": 0.001,
+  "random_seed": 42,
+  "device": "cpu",
+  "training_classes": {
+    "0": "damage",
+    "1": "Belt Joint",
+    "2": "Large Hole",
+    "3": "Large Tear",
+    "4": "Small Hole",
+    "5": "Small Tear"
+  },
+  "training_timestamp_utc": "2026-09-20T17:00:00Z"
+}

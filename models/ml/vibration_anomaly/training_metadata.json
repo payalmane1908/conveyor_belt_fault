@@ -1,0 +1,40 @@
+{
+  "model_version": "vibration-anomaly-detector-v1",
+  "model_type": "IsolationForest",
+  "task": "condition_aware_vibration_anomaly_detection",
+  "dataset_name": "Mendeley Experimental Belt Drive Vibration Dataset",
+  "mendeley_doi": "10.17632/jf8v2ndydr.1",
+  "publication_doi": "10.1016/j.dib.2023.109156",
+  "training_population": "NORMAL healthy runs (Repetitions 1 and 2)",
+  "training_samples_count": 102,
+  "evaluation_samples_count": 357,
+  "evaluation_population": "NORMAL Rep 3 (51 runs) + FAULTY_BELT (153 runs) + UNBALANCED (153 runs)",
+  "features": [
+    "speed_rpm",
+    "pretension_n",
+    "driver_rms",
+    "driver_peak",
+    "driver_crest_factor",
+    "driver_kurtosis",
+    "driver_dominant_freq_hz",
+    "driven_rms",
+    "driven_crest_factor",
+    "driven_dominant_freq_hz"
+  ],
+  "hyperparameters": {
+    "n_estimators": 100,
+    "max_samples": "auto",
+    "contamination": "auto",
+    "random_state": 42
+  },
+  "preprocessing": "RobustScaler (fitted exclusively on NORMAL training runs)",
+  "synthetic_data_used": false,
+  "framework_versions": {
+    "scikit_learn": "1.8.0",
+    "joblib": "1.5.3",
+    "numpy": "2.3.3",
+    "pandas": "2.3.3"
+  },
+  "training_timestamp_utc": "2026-09-20T14:26:24.988587+00:00",
+  "scientific_disclaimer": "RESEARCH BENCHMARK MODEL: Trained exclusively on experimental belt-drive test rig data. Detects dynamic operating condition vibration anomalies relative to healthy belt drive baseline. Does NOT claim conveyor belt joint rupture prediction or mining-field splice pullout detection."
+}

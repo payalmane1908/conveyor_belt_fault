@@ -1,0 +1,2525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conveyor Belt Joint Telemetry SCADA &amp; Health Monitor | Phase 3 HMI</title>
+  <meta name="description" content="Industrial SCADA: DSP feature extraction, joint health scoring, anomaly detection, and predictive maintenance for conveyor belt joints.">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    /* ===== DESIGN TOKENS ===== */
+    :root {
+      --bg-primary: #0a0f1a;
+      --bg-secondary: #0f1625;
+      --bg-card: #131c2e;
+      --bg-card-hover: #18233a;
+      --bg-panel: #0c1322;
+      --border: #1e2d47;
+      --border-accent: #2a3f60;
+
+      --text-primary: #e8edf5;
+      --text-secondary: #8a9bba;
+      --text-muted: #4a5e82;
+      --text-mono: #a8c0e8;
+
+      --accent-blue: #2563eb;
+      --accent-cyan: #06b6d4;
+      --accent-teal: #0d9488;
+
+      --risk-normal: #10b981;
+      --risk-normal-bg: rgba(16, 185, 129, 0.12);
+      --risk-watch: #f59e0b;
+      --risk-watch-bg: rgba(245, 158, 11, 0.12);
+      --risk-warning: #f97316;
+      --risk-warning-bg: rgba(249, 115, 22, 0.12);
+      --risk-critical: #ef4444;
+      --risk-critical-bg: rgba(239, 68, 68, 0.12);
+
+      --sim-color: #8b5cf6;
+      --sim-bg: rgba(139, 92, 246, 0.12);
+
+      --gradient-blue: linear-gradient(135deg, #1e3a5f 0%, #0f2040 100%);
+      --gradient-teal: linear-gradient(135deg, #0d3030 0%, #0a1a1a 100%);
+      --gradient-alert: linear-gradient(135deg, #3d1a1a 0%, #2a0f0f 100%);
+
+      --shadow: 0 4px 24px rgba(0,0,0,0.4);
+      --shadow-glow: 0 0 20px rgba(37, 99, 235, 0.15);
+
+      --radius: 8px;
+      --radius-sm: 4px;
+    }
+
+    /* ===== RESET & BASE ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 14px; }
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: 'Inter', system-ui, sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    /* Subtle grid overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(37,99,235,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(37,99,235,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ===== HEADER ===== */
+    .scada-header {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(10, 15, 26, 0.95);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .header-left { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+    .system-title h1 {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: var(--text-primary);
+    }
+    .unit-code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--accent-cyan);
+      background: rgba(6, 182, 212, 0.1);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      padding: 2px 8px;
+      border-radius: 3px;
+      display: inline-block;
+      margin-bottom: 3px;
+    }
+    .phase-badge {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: var(--accent-blue);
+      background: rgba(37, 99, 235, 0.1);
+      border: 1px solid rgba(37, 99, 235, 0.3);
+      padding: 2px 8px;
+      border-radius: 3px;
+    }
+
+    /* Status pills */
+    .status-pill-box { display: flex; flex-direction: column; gap: 2px; }
+    .status-label { font-size: 9px; font-weight: 600; letter-spacing: 0.1em; color: var(--text-muted); }
+    .badge {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      border: 1px solid transparent;
+    }
+    .badge .dot { width: 6px; height: 6px; border-radius: 50%; }
+    .badge-connected { background: rgba(16,185,129,0.1); border-color: rgba(16,185,129,0.3); color: var(--risk-normal); }
+    .badge-connected .dot { background: var(--risk-normal); box-shadow: 0 0 6px var(--risk-normal); animation: pulse 2s infinite; }
+    .badge-disconnected { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: var(--risk-critical); }
+    .badge-disconnected .dot { background: var(--risk-critical); }
+    .badge-sim { background: var(--sim-bg); border-color: rgba(139,92,246,0.3); color: var(--sim-color); }
+    .badge-sim .dot { background: var(--sim-color); box-shadow: 0 0 6px var(--sim-color); animation: pulse 1.5s infinite; }
+    .badge-neutral { background: rgba(74,94,130,0.15); border-color: var(--border); color: var(--text-secondary); }
+    .badge-neutral .dot { background: var(--text-muted); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .value-mono {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-mono);
+    }
+
+    /* ===== SIMULATION WARNING BANNER ===== */
+    #sim-banner {
+      display: none;
+      background: linear-gradient(90deg, rgba(139,92,246,0.15) 0%, rgba(139,92,246,0.05) 100%);
+      border-bottom: 1px solid rgba(139,92,246,0.4);
+      padding: 6px 20px;
+      text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      color: var(--sim-color);
+    }
+    #sim-banner.visible { display: block; }
+
+    /* ===== MAIN LAYOUT ===== */
+    .scada-main {
+      position: relative;
+      z-index: 1;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ===== GRID HELPERS ===== */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .grid-2-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+    .grid-1-2 { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
+
+    /* ===== CARD ===== */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .card:hover { border-color: var(--border-accent); }
+    .card-header {
+      padding: 10px 14px 8px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .card-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+    .card-body { padding: 14px; }
+
+    /* ===== KPI TILES ===== */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); }
+    .kpi-tile {
+      background: var(--bg-card);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: background 0.15s;
+    }
+    .kpi-tile:hover { background: var(--bg-card-hover); }
+    .kpi-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+    .kpi-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1;
+    }
+    .kpi-value.large { font-size: 28px; }
+    .kpi-sub {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* ===== RISK BADGE ===== */
+    .risk-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: var(--radius-sm);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      border: 1px solid transparent;
+    }
+    .risk-badge.risk-NORMAL { background: var(--risk-normal-bg); border-color: rgba(16,185,129,0.4); color: var(--risk-normal); }
+    .risk-badge.risk-WATCH  { background: var(--risk-watch-bg);  border-color: rgba(245,158,11,0.4);  color: var(--risk-watch); }
+    .risk-badge.risk-WARNING { background: var(--risk-warning-bg); border-color: rgba(249,115,22,0.4); color: var(--risk-warning); }
+    .risk-badge.risk-CRITICAL { background: var(--risk-critical-bg); border-color: rgba(239,68,68,0.5); color: var(--risk-critical); animation: blink-border 1.5s infinite; }
+    @keyframes blink-border {
+      0%, 100% { border-color: rgba(239,68,68,0.5); }
+      50% { border-color: rgba(239,68,68,0.1); }
+    }
+
+    /* ===== HEALTH SCORE GAUGE ===== */
+    .health-gauge-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 16px;
+    }
+    .health-gauge-ring {
+      position: relative;
+      width: 120px;
+      height: 120px;
+    }
+    .health-gauge-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .health-gauge-ring circle {
+      fill: none;
+      stroke-width: 8;
+      stroke-linecap: round;
+    }
+    .gauge-bg { stroke: var(--border); }
+    .gauge-fill { transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.4s; }
+    .health-gauge-value {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .health-gauge-number {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1;
+    }
+    .health-gauge-label {
+      font-size: 9px;
+      color: var(--text-muted);
+      letter-spacing: 0.1em;
+    }
+
+    /* ===== FFT CHART ===== */
+    .fft-chart-container {
+      position: relative;
+      height: 180px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+    .fft-canvas { width: 100%; height: 100%; display: block; }
+    .fft-overlay {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      display: flex;
+      gap: 12px;
+    }
+    .fft-stat {
+      background: rgba(10, 15, 26, 0.85);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 3px 7px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      color: var(--accent-cyan);
+    }
+    .fft-no-data {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.1em;
+    }
+
+    /* ===== WAVEFORM CHART ===== */
+    .waveform-container {
+      position: relative;
+      height: 120px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+    .waveform-canvas { width: 100%; height: 100%; display: block; }
+
+    /* ===== METRICS TABLE ===== */
+    .metrics-table { width: 100%; border-collapse: collapse; }
+    .metrics-table tr { border-bottom: 1px solid var(--border); }
+    .metrics-table tr:last-child { border-bottom: none; }
+    .metrics-table td {
+      padding: 6px 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+    }
+    .metrics-table .mt-label { color: var(--text-muted); width: 55%; }
+    .metrics-table .mt-value { color: var(--text-primary); text-align: right; }
+    .metrics-table .mt-value.elevated { color: var(--risk-warning); }
+    .metrics-table .mt-value.critical { color: var(--risk-critical); }
+    .mt-deviation-bar {
+      display: inline-block;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--border-accent);
+      vertical-align: middle;
+      transition: width 0.4s, background 0.3s;
+    }
+
+    /* ===== JOINT MATRIX ===== */
+    .joint-matrix-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 8px;
+    }
+    .joint-tile {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .joint-tile::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+    }
+    .joint-tile.risk-NORMAL::before { background: var(--risk-normal); }
+    .joint-tile.risk-WATCH::before  { background: var(--risk-watch); }
+    .joint-tile.risk-WARNING::before { background: var(--risk-warning); }
+    .joint-tile.risk-CRITICAL::before { background: var(--risk-critical); animation: pulse-bar 1s infinite; }
+    @keyframes pulse-bar {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .joint-tile:hover { border-color: var(--border-accent); background: var(--bg-card-hover); transform: translateY(-1px); }
+    .joint-tile.selected { border-color: var(--accent-blue); box-shadow: 0 0 0 1px var(--accent-blue); }
+    .joint-code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-left: 6px;
+      margin-bottom: 4px;
+    }
+    .joint-health-score {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 20px;
+      font-weight: 700;
+      margin-left: 6px;
+    }
+    .joint-risk-label {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      margin-left: 6px;
+      margin-top: 2px;
+    }
+    .joint-tile.risk-NORMAL .joint-health-score,
+    .joint-tile.risk-NORMAL .joint-risk-label { color: var(--risk-normal); }
+    .joint-tile.risk-WATCH .joint-health-score,
+    .joint-tile.risk-WATCH .joint-risk-label  { color: var(--risk-watch); }
+    .joint-tile.risk-WARNING .joint-health-score,
+    .joint-tile.risk-WARNING .joint-risk-label { color: var(--risk-warning); }
+    .joint-tile.risk-CRITICAL .joint-health-score,
+    .joint-tile.risk-CRITICAL .joint-risk-label { color: var(--risk-critical); }
+
+    /* ===== ALERT PANEL ===== */
+    .alert-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+    .alert-list::-webkit-scrollbar { width: 4px; }
+    .alert-list::-webkit-scrollbar-thumb { background: var(--border-accent); border-radius: 2px; }
+    .alert-item {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      transition: border-color 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .alert-item::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+    }
+    .alert-item.sev-WATCH::before    { background: var(--risk-watch); }
+    .alert-item.sev-WARNING::before  { background: var(--risk-warning); }
+    .alert-item.sev-CRITICAL::before { background: var(--risk-critical); animation: pulse-bar 1s infinite; }
+    .alert-item.sev-CRITICAL { background: linear-gradient(90deg, rgba(239,68,68,0.05) 0%, transparent 100%); border-color: rgba(239,68,68,0.3); }
+    .alert-sev-chip {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      padding: 2px 6px;
+      border-radius: 3px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .sev-WATCH .alert-sev-chip { background: var(--risk-watch-bg); color: var(--risk-watch); }
+    .sev-WARNING .alert-sev-chip { background: var(--risk-warning-bg); color: var(--risk-warning); }
+    .sev-CRITICAL .alert-sev-chip { background: var(--risk-critical-bg); color: var(--risk-critical); }
+    .alert-body { flex: 1; min-width: 0; }
+    .alert-type { font-size: 11px; font-weight: 600; color: var(--text-primary); }
+    .alert-joint { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--accent-cyan); }
+    .alert-time { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-muted); margin-top: 2px; }
+    .alert-provenance {
+      font-size: 9px;
+      font-weight: 600;
+      padding: 1px 5px;
+      border-radius: 2px;
+      margin-left: 6px;
+    }
+    .prov-SIMULATION { background: var(--sim-bg); color: var(--sim-color); }
+    .prov-LIVE { background: rgba(16,185,129,0.1); color: var(--risk-normal); }
+    .ack-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .ack-btn:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+    .acked-chip {
+      font-size: 9px;
+      color: var(--text-muted);
+      font-style: italic;
+      flex-shrink: 0;
+    }
+    .no-alerts {
+      text-align: center;
+      padding: 32px;
+      color: var(--text-muted);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+    }
+
+    /* ===== TREND SPARKLINE ===== */
+    .sparkline-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .sparkline-row:last-child { border-bottom: none; }
+    .sparkline-label { font-size: 10px; color: var(--text-muted); width: 90px; flex-shrink: 0; }
+    .sparkline-canvas { flex: 1; height: 28px; }
+    .sparkline-value { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-primary); width: 60px; text-align: right; flex-shrink: 0; }
+
+    /* ===== FAULT SIM CONTROLS ===== */
+    .fault-controls {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    .fault-btn {
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-panel);
+      color: var(--text-secondary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .fault-btn .fault-name { color: var(--text-primary); font-size: 11px; }
+    .fault-btn .fault-desc { font-size: 9px; color: var(--text-muted); font-weight: 400; letter-spacing: 0.04em; }
+    .fault-btn:hover { border-color: var(--sim-color); color: var(--sim-color); background: var(--sim-bg); }
+    .fault-btn:hover .fault-name { color: var(--sim-color); }
+    .fault-btn:active { transform: scale(0.98); }
+    .fault-btn.loading { opacity: 0.6; cursor: wait; }
+
+    .fault-btn-NORMAL:hover { border-color: var(--risk-normal); color: var(--risk-normal); background: var(--risk-normal-bg); }
+    .fault-btn-NORMAL:hover .fault-name { color: var(--risk-normal); }
+    .fault-btn-SPLICE_IMPACT:hover { border-color: var(--risk-watch); color: var(--risk-watch); background: var(--risk-watch-bg); }
+    .fault-btn-SPLICE_IMPACT:hover .fault-name { color: var(--risk-watch); }
+    .fault-btn-HARMONIC_LOOSENESS:hover { border-color: var(--risk-warning); color: var(--risk-warning); background: var(--risk-warning-bg); }
+    .fault-btn-HARMONIC_LOOSENESS:hover .fault-name { color: var(--risk-warning); }
+    .fault-btn-CRITICAL_FAILURE:hover { border-color: var(--risk-critical); color: var(--risk-critical); background: var(--risk-critical-bg); }
+    .fault-btn-CRITICAL_FAILURE:hover .fault-name { color: var(--risk-critical); }
+
+    /* ===== STREAM LOG ===== */
+    .stream-log {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--text-secondary);
+      height: 150px;
+      overflow-y: auto;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px;
+    }
+    .stream-log::-webkit-scrollbar { width: 4px; }
+    .stream-log::-webkit-scrollbar-thumb { background: var(--border-accent); }
+    .log-entry { padding: 2px 0; border-bottom: 1px solid rgba(30,45,71,0.4); display: flex; gap: 8px; }
+    .log-ts { color: var(--text-muted); flex-shrink: 0; }
+    .log-msg { color: var(--text-secondary); flex: 1; }
+    .log-health { color: var(--accent-cyan); flex-shrink: 0; }
+    .log-risk-NORMAL { color: var(--risk-normal); }
+    .log-risk-WATCH  { color: var(--risk-watch); }
+    .log-risk-WARNING { color: var(--risk-warning); }
+    .log-risk-CRITICAL { color: var(--risk-critical); }
+    .log-anomaly { color: var(--risk-warning); flex-shrink: 0; }
+
+    /* ===== BASELINE STATUS ===== */
+    .baseline-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+    }
+    .baseline-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .baseline-LEARNING .baseline-dot { background: var(--risk-watch); animation: pulse 1.5s infinite; }
+    .baseline-ACTIVE .baseline-dot   { background: var(--risk-normal); }
+    .baseline-INSUFFICIENT .baseline-dot { background: var(--text-muted); }
+
+    /* ===== DIVIDER ===== */
+    .section-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* ===== TELEMETRY TILES ===== */
+    .tele-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .tele-tile { background: var(--bg-card); padding: 12px 14px; }
+    .tele-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
+    .tele-val { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700; color: var(--text-primary); }
+    .tele-unit { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); margin-left: 3px; }
+    .tele-status { font-size: 9px; color: var(--text-muted); margin-top: 2px; }
+
+    /* ===== SCROLLBARS ===== */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-panel); }
+    ::-webkit-scrollbar-thumb { background: var(--border-accent); border-radius: 3px; }
+
+    /* ===== VISION MONITORING & JOINT PASSPORT ===== */
+    .vision-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 16px;
+    }
+    .vision-frame-box {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .vision-viewport {
+      position: relative;
+      background: #050811;
+      min-height: 320px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .vision-viewport img {
+      max-width: 100%;
+      max-height: 400px;
+      object-fit: contain;
+      display: block;
+    }
+    .vision-viewport-placeholder {
+      color: var(--text-muted);
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      text-align: center;
+      padding: 40px;
+    }
+    .vision-ctrl-bar {
+      padding: 10px 14px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .vision-ctrl-select {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      padding: 5px 8px;
+      outline: none;
+    }
+    .vision-ctrl-btn {
+      background: var(--accent-blue);
+      border: none;
+      border-radius: var(--radius-sm);
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 6px 14px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .vision-ctrl-btn:hover { opacity: 0.9; }
+    .vision-ctrl-btn:active { transform: scale(0.98); }
+    .vision-ctrl-btn.secondary {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .vision-ctrl-btn.secondary:hover {
+      border-color: var(--border-accent);
+      color: var(--text-primary);
+    }
+    .detection-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+    }
+    .detection-table th {
+      text-align: left;
+      padding: 6px 10px;
+      font-size: 9px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      text-transform: uppercase;
+    }
+    .detection-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(30,45,71,0.5);
+    }
+    .det-tag {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .det-Large-Tear { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+    .det-Small-Tear { background: rgba(249, 115, 22, 0.2); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.4); }
+    .det-Large-Hole { background: rgba(37, 99, 235, 0.2); color: #60a5fa; border: 1px solid rgba(37, 99, 235, 0.4); }
+    .det-Small-Hole { background: rgba(217, 70, 239, 0.2); color: #e879f9; border: 1px solid rgba(217, 70, 239, 0.4); }
+    .det-Belt-Joint { background: rgba(234, 179, 8, 0.2); color: #fde047; border: 1px solid rgba(234, 179, 8, 0.4); }
+    .det-damage     { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+    .disclaimer-banner {
+      background: rgba(37, 99, 235, 0.08);
+      border: 1px solid rgba(37, 99, 235, 0.25);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      font-size: 10px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+      margin-top: 10px;
+    }
+    .disclaimer-banner strong { color: var(--accent-cyan); }
+    .passport-evidence-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .evidence-block {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .evidence-title {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
+    }
+    .evidence-stat-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      padding: 3px 0;
+      border-bottom: 1px solid rgba(30,45,71,0.3);
+    }
+    .evidence-stat-label { color: var(--text-muted); font-size: 10px; }
+    .evidence-stat-val { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--text-primary); }
+    .safety-rule-box {
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 12px;
+    }
+    .safety-rule-box.rule-CRITICAL {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+    .safety-rule-box.rule-WARNING {
+      background: rgba(249, 115, 22, 0.1);
+      border-color: rgba(249, 115, 22, 0.4);
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 1200px) {
+      .grid-4, .kpi-grid, .tele-grid, .passport-evidence-grid { grid-template-columns: repeat(2, 1fr); }
+      .grid-2-1, .grid-1-2, .vision-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      .grid-2, .grid-3, .passport-evidence-grid { grid-template-columns: 1fr; }
+      .fault-controls { grid-template-columns: 1fr; }
+      .joint-matrix-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="scada-header">
+  <div class="header-left">
+    <div>
+      <div class="unit-code">CV-MINE-01</div>
+      <h1 class="system-title">Conveyor Joint Health Monitor</h1>
+    </div>
+    <div class="phase-badge">PHASE 5 — EDGE DAQ + REAL SENSOR PIPELINE + JOINT LIFECYCLE</div>
+  </div>
+  <div class="header-right">
+    <button id="stream-toggle-btn" onclick="toggleContinuousStream()" style="background:var(--sim-color);color:#fff;border:none;border-radius:var(--radius-sm);padding:6px 12px;font-size:10px;font-weight:600;letter-spacing:0.06em;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all 0.2s">
+      <span id="stream-toggle-icon">▶</span>
+      <span id="stream-toggle-text">START DEMO STREAM</span>
+    </button>
+    <div class="status-pill-box">
+      <span class="status-label">BACKEND LINK</span>
+      <div id="ui-connection-badge" class="badge badge-disconnected">
+        <span class="dot"></span><span id="ws-status-text">UI OFFLINE</span>
+      </div>
+    </div>
+    <div class="status-pill-box">
+      <span class="status-label">DATA STREAM</span>
+      <div id="stream-badge" class="badge badge-neutral">
+        <span class="dot"></span><span id="stream-text">NO ACTIVE STREAM</span>
+      </div>
+    </div>
+    <div class="status-pill-box">
+      <span class="status-label">ACTIVE ALERTS</span>
+      <div id="alert-count-badge" class="badge badge-neutral">
+        <span class="dot"></span><span id="alert-count-text">0</span>
+      </div>
+    </div>
+    <div class="status-pill-box">
+      <span class="status-label">UTC CLOCK</span>
+      <div id="utc-clock" class="value-mono">--:--:--</div>
+    </div>
+  </div>
+</header>
+
+<!-- SIMULATION MODE BANNER -->
+<div id="sim-banner">
+  ⚠ SIMULATION MODE — All displayed data is synthetic. No real machine measurements are being shown.
+</div>
+
+<!-- MAIN SCADA LAYOUT -->
+<main class="scada-main">
+
+  <!-- ROW 1: DSP Metrics Tiles -->
+  <div class="section-label">DSP FEATURE EXTRACTION <span style="color:var(--accent-cyan);font-weight:400;font-size:10px">(Real-time per burst)</span></div>
+  <div class="tele-grid">
+    <div class="tele-tile">
+      <div class="tele-label">RMS Acceleration</div>
+      <div><span class="tele-val" id="dsp-rms">—</span><span class="tele-unit">g</span></div>
+      <div class="tele-status" id="dsp-rms-dev">baseline deviation: —</div>
+    </div>
+    <div class="tele-tile">
+      <div class="tele-label">Crest Factor</div>
+      <div><span class="tele-val" id="dsp-crest">—</span></div>
+      <div class="tele-status" id="dsp-crest-thr">engineering_threshold: 4.0</div>
+    </div>
+    <div class="tele-tile">
+      <div class="tele-label">Kurtosis (Fisher)</div>
+      <div><span class="tele-val" id="dsp-kurt">—</span></div>
+      <div class="tele-status">Gaussian baseline ≈ 0</div>
+    </div>
+    <div class="tele-tile">
+      <div class="tele-label">Dominant Freq.</div>
+      <div><span class="tele-val" id="dsp-freq">—</span><span class="tele-unit">Hz</span></div>
+      <div class="tele-status" id="dsp-freq-base">baseline: — Hz</div>
+    </div>
+    <div class="tele-tile">
+      <div class="tele-label">Peak Acceleration</div>
+      <div><span class="tele-val" id="dsp-peak">—</span><span class="tele-unit">g</span></div>
+      <div class="tele-status">max |x|</div>
+    </div>
+    <div class="tele-tile">
+      <div class="tele-label">Skewness</div>
+      <div><span class="tele-val" id="dsp-skew">—</span></div>
+      <div class="tele-status">amplitude asymmetry</div>
+    </div>
+    <div class="tele-tile">
+      <div class="tele-label">Spectral Centroid</div>
+      <div><span class="tele-val" id="dsp-centroid">—</span><span class="tele-unit">Hz</span></div>
+      <div class="tele-status">spectral centre of mass</div>
+    </div>
+    <div class="tele-tile">
+      <div class="tele-label">Spectral Energy</div>
+      <div><span class="tele-val" id="dsp-energy">—</span></div>
+      <div class="tele-status">Σ(amplitude²)</div>
+    </div>
+  </div>
+
+  <!-- ROW 2: FFT + Health Score -->
+  <div class="grid-2">
+    <!-- FFT Spectrum Panel -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">FFT Amplitude Spectrum</span>
+        <span class="value-mono" id="fft-dom-label" style="font-size:10px;color:var(--accent-cyan)">—</span>
+      </div>
+      <div class="card-body">
+        <div class="fft-chart-container">
+          <canvas id="fft-canvas" class="fft-canvas"></canvas>
+          <div class="fft-no-data" id="fft-no-data">AWAITING TELEMETRY BURST</div>
+          <div class="fft-overlay">
+            <div class="fft-stat" id="fft-stat-dom">DOM: — Hz</div>
+            <div class="fft-stat" id="fft-stat-cent">CENT: — Hz</div>
+          </div>
+        </div>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:8px;justify-content:space-between">
+          <span style="font-size:9px;color:var(--text-muted)">0 Hz</span>
+          <span style="font-size:9px;color:var(--text-muted)" id="fft-nyquist">500 Hz (Nyquist)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Health Score + Risk State -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Joint Health Score</span>
+        <div id="current-risk-badge" class="risk-badge risk-NORMAL">NORMAL</div>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;gap:20px;align-items:center">
+          <div class="health-gauge-container">
+            <div class="health-gauge-ring">
+              <svg viewBox="0 0 120 120">
+                <circle class="gauge-bg" cx="60" cy="60" r="52" stroke-dasharray="327" stroke-dashoffset="0"/>
+                <circle id="gauge-fill" class="gauge-fill" cx="60" cy="60" r="52"
+                        stroke="#10b981"
+                        stroke-dasharray="327"
+                        stroke-dashoffset="327"/>
+              </svg>
+              <div class="health-gauge-value">
+                <span class="health-gauge-number" id="gauge-number">—</span>
+                <span class="health-gauge-label">HEALTH</span>
+              </div>
+            </div>
+            <div class="baseline-status baseline-INSUFFICIENT" id="baseline-status-box">
+              <div class="baseline-dot"></div>
+              <span id="baseline-status-text">BASELINE: INSUFFICIENT</span>
+            </div>
+          </div>
+
+          <div style="flex:1">
+            <table class="metrics-table">
+              <tr><td class="mt-label">Revolution #</td><td class="mt-value" id="rev-count">—</td></tr>
+              <tr><td class="mt-label">Consecutive Abnormal</td><td class="mt-value" id="consec-abn">0</td></tr>
+              <tr><td class="mt-label">Anomaly Detected</td><td class="mt-value" id="anomaly-cell">—</td></tr>
+              <tr><td class="mt-label">RMS Deviation (σ)</td><td class="mt-value" id="rms-dev-cell">—</td></tr>
+              <tr><td class="mt-label">Data Provenance</td><td class="mt-value" id="provenance-cell">—</td></tr>
+              <tr><td class="mt-label">Last Updated</td><td class="mt-value" id="last-updated-cell">—</td></tr>
+            </table>
+
+            <div style="margin-top:10px">
+              <div style="font-size:9px;color:var(--text-muted);margin-bottom:4px;letter-spacing:0.1em">HEALTH BANDS (engineering_threshold)</div>
+              <div style="display:flex;gap:3px;height:6px;border-radius:3px;overflow:hidden">
+                <div style="flex:2.5;background:var(--risk-critical)"></div>
+                <div style="flex:2.5;background:var(--risk-warning)"></div>
+                <div style="flex:1.5;background:var(--risk-watch)"></div>
+                <div style="flex:1;background:var(--risk-normal)"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-muted);margin-top:2px">
+                <span>0</span><span>50</span><span>75</span><span>90</span><span>100</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 3: Joint Matrix + Alerts -->
+  <div class="grid-1-2">
+    <!-- Joint Health Matrix -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Joint Fleet Status</span>
+        <span id="joint-count" class="value-mono" style="font-size:10px">0 joints</span>
+      </div>
+      <div class="card-body">
+        <div class="joint-matrix-grid" id="joint-matrix">
+          <div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--text-muted);font-size:11px">
+            No joints registered yet.<br>
+            <span style="font-size:9px">Register via POST /api/v1/joints</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Alerts Panel -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Active Alerts — Anomaly Detection Log</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="font-size:9px;color:var(--text-muted)">Not failure confirmation — investigation required</span>
+          <button id="refresh-alerts-btn" onclick="refreshAlerts()" style="font-size:10px;padding:3px 8px;background:none;border:1px solid var(--border);color:var(--text-muted);border-radius:3px;cursor:pointer">↻ Refresh</button>
+        </div>
+      </div>
+      <div class="card-body" style="padding:10px">
+        <div class="alert-list" id="alert-list">
+          <div class="no-alerts">NO ACTIVE ALERTS — System Normal</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 4: Fault Simulation + Live Log -->
+  <div class="grid-2">
+    <!-- Fault Simulation Controls -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">⚠ Fault Simulation Controls</span>
+        <span class="value-mono" style="font-size:9px;color:var(--sim-color)">SIMULATION — immutable provenance tag</span>
+      </div>
+      <div class="card-body">
+        <div style="margin-bottom:12px">
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">Target Joint:</div>
+          <select id="sim-joint-id" class="vision-ctrl-select" style="width:100%;padding:6px 10px">
+            <option value="">-- Auto-Assign to Active Joint --</option>
+          </select>
+          <div style="font-size:9px;color:var(--text-muted);margin-top:4px">Sensor ID: sim-accel-p3-01 (default)</div>
+        </div>
+        <div class="fault-controls">
+          <button class="fault-btn fault-btn-NORMAL" onclick="runFaultSim('NORMAL')">
+            <span class="fault-name">NORMAL</span>
+            <span class="fault-desc">50 Hz sine + low noise. Crest≈√2, Kurtosis≈-1.5</span>
+          </button>
+          <button class="fault-btn fault-btn-SPLICE_IMPACT" onclick="runFaultSim('SPLICE_IMPACT')">
+            <span class="fault-name">SPLICE_IMPACT</span>
+            <span class="fault-desc">Periodic impulses every 100ms. Elevated crest + kurtosis</span>
+          </button>
+          <button class="fault-btn fault-btn-HARMONIC_LOOSENESS" onclick="runFaultSim('HARMONIC_LOOSENESS')">
+            <span class="fault-name">HARMONIC_LOOSENESS</span>
+            <span class="fault-desc">50+100+150 Hz harmonics. Multi-peak FFT pattern</span>
+          </button>
+          <button class="fault-btn fault-btn-CRITICAL_FAILURE" onclick="runFaultSim('CRITICAL_FAILURE')">
+            <span class="fault-name">CRITICAL_FAILURE</span>
+            <span class="fault-desc">High broadband noise + large impacts. RMS &gt;&gt; threshold</span>
+          </button>
+        </div>
+        <div id="sim-status" style="margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-muted);min-height:16px"></div>
+      </div>
+    </div>
+
+    <!-- Live WebSocket Event Log -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Live Event Stream</span>
+        <button onclick="clearLog()" style="font-size:10px;padding:3px 8px;background:none;border:1px solid var(--border);color:var(--text-muted);border-radius:3px;cursor:pointer">Clear</button>
+      </div>
+      <div class="card-body" style="padding:8px">
+        <div class="stream-log" id="event-log">
+          <div class="log-entry"><span class="log-ts">--:--:--</span><span class="log-msg">Waiting for WebSocket connection...</span></div>
+        </div>
+      </div>
+  <!-- ROW 5: OPTICAL INSPECTION & FORENSIC VISION LAYER -->
+  <div class="section-label" style="margin-top:16px">FORENSIC VISION &amp; OPTICAL DAMAGE DETECTION <span style="color:var(--accent-cyan);font-weight:400;font-size:10px">(YOLOv8 Damage Detector v1.0)</span></div>
+  <div class="card">
+    <div class="card-header">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span class="card-title">Camera Feed &amp; Optical Detection Frame</span>
+        <div id="vision-model-status-badge" class="badge badge-connected">
+          <span class="dot"></span><span id="vision-model-status-text">TRAINED_MODEL</span>
+        </div>
+        <div id="vision-source-type-badge" class="badge badge-neutral">
+          <span class="dot"></span><span id="vision-source-type-text">SOURCE: RESEARCH_DATASET</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span id="vision-prototype-severity-badge" class="risk-badge risk-NORMAL">NORMAL</span>
+      </div>
+    </div>
+    <div class="card-body" style="padding:0">
+      <div class="vision-ctrl-bar">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px;color:var(--text-muted)">Camera:</span>
+          <select id="vision-camera-select" class="vision-ctrl-select">
+            <option value="CAM-SPLICE-01">CAM-SPLICE-01 (Head Pulley Hood)</option>
+            <option value="CAM-RETURN-02">CAM-RETURN-02 (Return Strand)</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px;color:var(--text-muted)">Joint Link:</span>
+          <select id="vision-joint-select" class="vision-ctrl-select">
+            <option value="">-- No Joint Linked --</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px;color:var(--text-muted)">Test Frame (Held-Out):</span>
+          <select id="vision-test-sample-select" class="vision-ctrl-select" style="max-width:240px">
+            <option value="">Loading test samples...</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px;color:var(--text-muted)">Min Conf:</span>
+          <input type="range" id="vision-conf-slider" min="0.01" max="0.80" step="0.01" value="0.05" oninput="document.getElementById('vision-conf-val').textContent = Math.round(this.value * 100) + '%'" style="width:65px;accent-color:var(--accent-cyan);cursor:pointer">
+          <span id="vision-conf-val" style="font-family:'JetBrains Mono';font-size:10px;color:var(--accent-cyan);font-weight:600">5%</span>
+        </div>
+        <button class="vision-ctrl-btn" onclick="runTestSampleInference()">▶ Run Detection (Test Set)</button>
+        <label class="vision-ctrl-btn secondary" style="cursor:pointer;display:inline-flex;align-items:center" title="Upload custom belt inspection image (.jpg, .png)">
+          Upload Custom Frame
+          <input type="file" id="vision-file-input" accept="image/*" style="display:none" onchange="uploadCustomFrame(this)">
+        </label>
+        <span id="vision-busy-indicator" style="font-size:10px;color:var(--accent-cyan);display:none;font-family:'JetBrains Mono'">Running YOLO inference...</span>
+      </div>
+
+      <div class="vision-grid" style="padding:14px">
+        <!-- Viewport -->
+        <div class="vision-frame-box">
+          <div class="vision-viewport" id="vision-viewport">
+            <div class="vision-viewport-placeholder" id="vision-placeholder">
+              SELECT A TEST SAMPLE OR UPLOAD AN INSPECTION FRAME TO RUN DETECTIONS
+            </div>
+            <img id="vision-display-img" src="" alt="Analyzed Conveyor Frame" style="display:none">
+          </div>
+          <div style="padding:8px 12px;background:var(--bg-card);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:10px">
+            <span id="vision-frame-meta" style="color:var(--text-muted);font-family:'JetBrains Mono'">No frame loaded</span>
+            <span id="vision-classes-note" style="color:var(--text-muted)">COCO Classes: Belt Joint, Large/Small Tear, Large/Small Hole, damage</span>
+          </div>
+        </div>
+
+        <!-- Detections Breakdown -->
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px">
+            <div style="font-size:10px;font-weight:700;letter-spacing:0.1em;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px">
+              Detected Damage Objects (<span id="det-count-span">0</span>)
+            </div>
+            <div style="max-height:220px;overflow-y:auto">
+              <table class="detection-table">
+                <thead>
+                  <tr>
+                    <th>Class</th>
+                    <th>Conf</th>
+                    <th>Bounding Box [x, y, w, h]</th>
+                    <th>Area (px)</th>
+                  </tr>
+                </thead>
+                <tbody id="detection-table-body">
+                  <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px">No objects detected or no image analyzed</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <span style="font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:0.1em">PRIMARY DAMAGE:</span>
+              <span id="primary-damage-type" style="font-family:'JetBrains Mono';font-size:11px;font-weight:700;color:var(--text-primary)">NORMAL_SURFACE</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <span style="font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:0.1em">PEAK CONFIDENCE:</span>
+              <span id="peak-confidence-val" style="font-family:'JetBrains Mono';font-size:11px;color:var(--accent-cyan)">0.00%</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:0.1em">ENGINEERING SEVERITY:</span>
+              <span id="prototype-severity-val" style="font-family:'JetBrains Mono';font-size:11px;color:var(--risk-normal)">NORMAL</span>
+            </div>
+          </div>
+
+          <div class="disclaimer-banner">
+            <strong>SCIENTIFIC FIDELITY NOTICE:</strong> The model detects only labeled classes from the conveyor damage dataset (Belt Joint, Large Tear, Small Tear, Large Hole, Small Hole, damage). It does <em>not</em> claim crack detection. Engineering severity thresholds are designated as prototype indicators, not ISO standards.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 6: MULTI-EVIDENCE JOINT PASSPORT -->
+  <div class="section-label" style="margin-top:16px">PHYSICAL JOINT PASSPORT <span style="color:var(--accent-cyan);font-weight:400;font-size:10px">(Multi-Evidence Health Architecture)</span></div>
+  <div class="card">
+    <div class="card-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="card-title">Joint Passport Inspection</span>
+        <select id="passport-joint-selector" class="vision-ctrl-select" onchange="loadJointPassport(this.value)">
+          <option value="">Select Joint...</option>
+        </select>
+        <span id="passport-code-badge" class="unit-code">J-01</span>
+      </div>
+      <div id="passport-safety-action" class="risk-badge risk-NORMAL">CONTINUE_NORMAL_OPERATION</div>
+    </div>
+    <div class="card-body">
+      <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px">
+        <strong style="color:var(--text-primary)">Core Engineering Principle:</strong> One physical joint → multiple independent evidence sources. Sensor signals (Vibration/DSP) and Optical signals (Vision) are evaluated independently without arbitrary mathematical weight blending.
+      </div>
+
+      <div class="passport-evidence-grid">
+        <!-- Vibration Evidence -->
+        <div class="evidence-block">
+          <div class="evidence-title">
+            <span>Vibration / DSP Evidence</span>
+            <span style="font-size:9px;color:var(--text-muted)" id="passport-vibe-state">NORMAL</span>
+          </div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">RMS Acceleration:</span><span class="evidence-stat-val" id="pp-rms">— g</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Crest Factor:</span><span class="evidence-stat-val" id="pp-crest">—</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Kurtosis (Fisher):</span><span class="evidence-stat-val" id="pp-kurt">—</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Dominant Frequency:</span><span class="evidence-stat-val" id="pp-freq">— Hz</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Health Score:</span><span class="evidence-stat-val" id="pp-health" style="color:var(--risk-normal)">100 / 100</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Baseline Status:</span><span class="evidence-stat-val" id="pp-baseline">INSUFFICIENT</span></div>
+        </div>
+
+        <!-- Vision Evidence -->
+        <div class="evidence-block">
+          <div class="evidence-title">
+            <span>Vision / Optical Evidence</span>
+            <span style="font-size:9px;color:var(--text-muted)" id="passport-vis-state">NORMAL</span>
+          </div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Latest Inspection:</span><span class="evidence-stat-val" id="pp-vis-ts">—</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Model Status:</span><span class="evidence-stat-val" id="pp-vis-status" style="color:var(--risk-normal)">TRAINED_MODEL</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Primary Damage:</span><span class="evidence-stat-val" id="pp-vis-damage">NONE</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Detection Confidence:</span><span class="evidence-stat-val" id="pp-vis-conf">—</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Total Anomaly Objects:</span><span class="evidence-stat-val" id="pp-vis-count">0</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Prototype Severity:</span><span class="evidence-stat-val" id="pp-vis-sev">NORMAL</span></div>
+        </div>
+
+        <!-- Operational State -->
+        <div class="evidence-block">
+          <div class="evidence-title">
+            <span>Operational &amp; Physical State</span>
+            <span style="font-size:9px;color:var(--risk-normal)">STABLE</span>
+          </div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Belt Speed:</span><span class="evidence-stat-val" id="pp-speed">3.2 m/s</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Motor Current:</span><span class="evidence-stat-val" id="pp-load">142.5 A</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Bearing Temp:</span><span class="evidence-stat-val" id="pp-btemp">58.1 °C</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Ambient Temp:</span><span class="evidence-stat-val" id="pp-atemp">34.2 °C</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Revolutions Count:</span><span class="evidence-stat-val" id="pp-revs">—</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Splice Construction:</span><span class="evidence-stat-val" style="font-size:9px">Finger Splice</span></div>
+        </div>
+
+        <!-- Vibration ML Evidence (Phase 4B) -->
+        <div class="evidence-block">
+          <div class="evidence-title">
+            <span>Vibration ML Evidence</span>
+            <span style="font-size:9px;color:var(--text-muted)" id="passport-ml-badge">READY</span>
+          </div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Model:</span><span class="evidence-stat-val" id="pp-ml-version">vibration-anomaly-v1</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Anomaly:</span><span class="evidence-stat-val" id="pp-ml-decision" style="color:var(--risk-normal)">NORMAL</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Raw Score:</span><span class="evidence-stat-val" id="pp-ml-score">—</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Operating Regime:</span><span class="evidence-stat-val" id="pp-ml-regime">—</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Evidence (σ):</span><span class="evidence-stat-val" id="pp-ml-dev" style="font-size:9px;max-width:140px;text-align:right">—</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Benchmark:</span><span class="evidence-stat-val" style="font-size:9px" title="Mendeley Data DOI 10.17632/jf8v2ndydr.1">Mendeley Experimental</span></div>
+          <div style="font-size:8.5px;color:var(--text-muted);margin-top:2px;line-height:1.2;border-top:1px dashed var(--border);padding-top:4px">
+            Research-benchmark anomaly detection on experimental belt-drive data. Evidence only; does not predict joint rupture or trigger trip.
+          </div>
+        </div>
+      </div>
+
+      <div class="safety-rule-box" id="pp-safety-box">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-primary)" id="pp-safety-title">Deterministic Safety Engine: Normal Belt Operation</div>
+          <div style="font-size:9px;color:var(--text-secondary)" id="pp-safety-desc">Vibration signals within nominal baseline bounds; no critical tears or punctures detected by optical inspection.</div>
+        </div>
+        <div style="font-family:'JetBrains Mono';font-size:12px;font-weight:700;color:var(--risk-normal)" id="pp-rule-tag">RULE: PASS</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 4: Phase 5 Physical Edge DAQ, Joint Lifecycle & Maintenance -->
+  <div class="card" style="margin-top:16px" id="phase5-card">
+    <div class="card-header" style="justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="card-title">PHYSICAL EDGE DAQ &amp; JOINT LIFECYCLE</span>
+        <span class="badge" id="daq-com-badge" style="background:rgba(6,182,212,0.15);color:var(--accent-cyan);border:1px solid rgba(6,182,212,0.4)">PHASE 5 HARDWARE READY</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;color:var(--text-muted)">TARGET NODE:</span>
+        <span class="value-mono" style="font-size:10px;color:var(--accent-cyan)" id="daq-device-id">esp32-node-01</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:16px" id="phase5-grid">
+        
+        <!-- Block 1: Hardware Serial DAQ Interface -->
+        <div class="evidence-block">
+          <div class="evidence-title">
+            <span>Hardware Serial Interface</span>
+            <span id="daq-port-status" class="badge badge-disconnected" style="font-size:8.5px">STANDBY / LISTENING</span>
+          </div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Port / Speed:</span><span class="evidence-stat-val" id="daq-port-baud">COM3 @ 115200</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Transducer:</span><span class="evidence-stat-val">ADXL345 (SPI) / MPU6050</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Sampling:</span><span class="evidence-stat-val">1000 Hz (Hardware Timer)</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Burst Window:</span><span class="evidence-stat-val">100 samples / 0.1s</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Packets Read:</span><span class="evidence-stat-val" id="daq-packets-read">0</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Bytes Ingested:</span><span class="evidence-stat-val" id="daq-bytes-read">0 B</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Tachometer RPM:</span><span class="evidence-stat-val" id="daq-tacho-rpm" style="color:var(--accent-cyan)">—</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Hardware Clock:</span><span class="evidence-stat-val" id="daq-hw-clock" style="font-size:9.5px">64-bit µs timer</span></div>
+          <div style="margin-top:4px;font-size:8.5px;color:var(--text-muted);line-height:1.3">
+            Physical packets from ESP32 serial COM port are cryptographically hashed and quarantined with <code>data_provenance: LIVE</code>.
+          </div>
+        </div>
+
+        <!-- Block 2: Joint Lifecycle & Observed Degradation Trend -->
+        <div class="evidence-block">
+          <div class="evidence-title">
+            <span>Joint Lifecycle &amp; Trend</span>
+            <span id="lifecycle-trend-badge" class="badge" style="background:rgba(139,92,246,0.15);color:var(--sim-color);font-size:8.5px">INSUFFICIENT_HISTORY</span>
+          </div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Selected Joint:</span><span class="evidence-stat-val" id="lc-joint-code">J-01 (joint-001)</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Splice Type:</span><span class="evidence-stat-val" id="lc-splice-type">Finger Splice</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Total Revolutions:</span><span class="evidence-stat-val" id="lc-total-revs">—</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Estimated Runtime:</span><span class="evidence-stat-val" id="lc-est-hours">— hrs</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Stress Exposure:</span><span class="evidence-stat-val" id="lc-stress-class">NOMINAL</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Rate of Change:</span><span class="evidence-stat-val" id="lc-rms-slope" style="color:var(--accent-cyan)">—</span></div>
+          <div class="evidence-stat-row"><span class="evidence-stat-label">Trend Direction:</span><span class="evidence-stat-val" id="lc-trend-dir">STABLE</span></div>
+          <div style="margin-top:4px;font-size:8.5px;color:var(--text-muted);line-height:1.3" id="lc-guardrail-msg">
+            Minimum 5 revolutions required to estimate empirical trend slope without noise. Deterministic safety state remains authoritative.
+          </div>
+        </div>
+
+        <!-- Block 3: Tamper-Evident Maintenance Logging -->
+        <div class="evidence-block">
+          <div class="evidence-title">
+            <span>Maintenance &amp; Baseline Reset</span>
+            <span class="badge badge-neutral" style="font-size:8.5px">SHA-256 VERIFIED</span>
+          </div>
+          <form id="maint-form" onsubmit="handleMaintenanceSubmit(event)" style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;gap:6px">
+              <input type="text" id="maint-tech" placeholder="Tech ID (e.g. TECH-4091)" required style="flex:1;background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:10px;padding:5px 8px;font-family:'JetBrains Mono'">
+              <select id="maint-action" style="flex:1;background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:10px;padding:5px 6px">
+                <option value="INSPECTION">Routine Inspection</option>
+                <option value="SPLICE_REPAIR">Splice Repair</option>
+                <option value="RETENSIONING">Belt Retensioning</option>
+                <option value="RECALIBRATION">Sensor Recalibration</option>
+                <option value="REPLACEMENT">Joint Replacement</option>
+              </select>
+            </div>
+            <textarea id="maint-notes" rows="2" placeholder="Maintenance intervention notes &amp; mechanical findings..." style="width:100%;background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:10px;padding:5px 8px;font-family:'Inter';resize:none"></textarea>
+            <label style="font-size:9.5px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;cursor:pointer">
+              <input type="checkbox" id="maint-reset-baseline" style="accent-color:var(--accent-cyan)">
+              Reset Baseline &amp; Risk (Splice Mechanical Work)
+            </label>
+            <button type="submit" id="maint-submit-btn" style="background:var(--accent-blue);color:#fff;border:none;border-radius:var(--radius-sm);padding:6px 12px;font-size:10px;font-weight:600;letter-spacing:0.06em;cursor:pointer;transition:all 0.2s">
+              COMMIT MAINTENANCE SIGN-OFF
+            </button>
+          </form>
+          <div id="maint-history" style="max-height:65px;overflow-y:auto;margin-top:4px;border-top:1px solid var(--border);padding-top:4px;font-size:9px;color:var(--text-secondary)">
+            <div style="color:var(--text-muted);font-style:italic">No recent maintenance recorded.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ===== JAVASCRIPT ===== -->
+<script>
+const API = '/api/v1';
+const WS_URL = `ws://${location.host}/ws/v1/live-telemetry`;
+const PI2 = 2 * Math.PI;
+
+// ── State ──────────────────────────────────────────────────────────────────
+let ws = null, wsReconnect = null;
+let lastFFTData = null;
+let simulationMode = false;
+let jointRegistry = {};  // joint_id → { code, risk, health, rev }
+
+// ── UTC Clock ─────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('utc-clock').textContent =
+    now.toISOString().slice(11, 19) + ' UTC';
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Log ───────────────────────────────────────────────────────────────────
+function logEntry(ts, msg, extra, riskClass) {
+  const log = document.getElementById('event-log');
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+  const t = ts ? ts.slice(11, 19) : new Date().toISOString().slice(11, 19);
+  div.innerHTML =
+    `<span class="log-ts">${t}</span>` +
+    `<span class="log-msg">${msg}</span>` +
+    (extra ? `<span class="log-health ${riskClass || ''}">${extra}</span>` : '');
+  log.insertBefore(div, log.firstChild);
+  while (log.children.length > 80) log.removeChild(log.lastChild);
+}
+
+function clearLog() {
+  document.getElementById('event-log').innerHTML = '';
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────
+function connectWS() {
+  if (ws && ws.readyState < 2) return;
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    setWSStatus(true);
+    logEntry(null, 'WebSocket connected');
+    if (wsReconnect) { clearTimeout(wsReconnect); wsReconnect = null; }
+    // Start ping
+    ws._pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({action:'ping', timestamp: Date.now()}));
+      }
+    }, 10000);
+  };
+
+  ws.onmessage = (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    handleWSMessage(msg);
+  };
+
+  ws.onclose = () => {
+    setWSStatus(false);
+    clearInterval(ws._pingInterval);
+    wsReconnect = setTimeout(connectWS, 3000);
+  };
+
+  ws.onerror = () => { ws.close(); };
+}
+
+function setWSStatus(connected) {
+  const badge = document.getElementById('ui-connection-badge');
+  const text = document.getElementById('ws-status-text');
+  badge.className = 'badge ' + (connected ? 'badge-connected' : 'badge-disconnected');
+  text.textContent = connected ? 'CONNECTED' : 'OFFLINE';
+}
+
+// ── Message Handler ──────────────────────────────────────────────────────
+function handleWSMessage(msg) {
+  if (msg.type === 'TELEMETRY_BURST') {
+    handleBurst(msg);
+  } else if (msg.type === 'HEALTH_UPDATE') {
+    handleHealthUpdate(msg);
+  } else if (msg.type === 'ALERT_TRIGGERED') {
+    handleAlertTriggered(msg);
+  } else if (msg.type === 'VISION_UPDATE') {
+    handleVisionUpdate(msg);
+  } else if (msg.type === 'ML_ANOMALY_UPDATE') {
+    handleMLAnomalyUpdate(msg);
+  } else if (msg.type === 'MAINTENANCE_LOGGED') {
+    handleMaintenanceLogged(msg);
+  } else if (msg.type === 'PONG') {
+    // latency = Date.now() - msg.client_time
+  }
+}
+
+function handleBurst(msg) {
+  const prov = msg.data_provenance;
+  simulationMode = (prov === 'SIMULATION');
+  updateStreamBadge(prov);
+  updateSimBanner(simulationMode);
+
+  const streamBadge = document.getElementById('stream-badge');
+  streamBadge.className = 'badge ' + (simulationMode ? 'badge-sim' : 'badge-connected');
+  document.getElementById('stream-text').textContent = prov;
+
+  logEntry(
+    msg.received_at_utc,
+    `BURST seq#${msg.sequence_number} dev:${msg.device_id.slice(-8)} ` +
+    `${msg.sample_count}smp@${msg.sampling_rate_hz}Hz`,
+    prov, simulationMode ? 'log-risk-WARNING' : 'log-risk-NORMAL'
+  );
+}
+
+function handleHealthUpdate(msg) {
+  // Update DSP tiles
+  const m = msg.metrics || {};
+  setText('dsp-rms', fmt(m.rms, 4));
+  setText('dsp-peak', fmt(m.peak, 4));
+  setText('dsp-crest', fmt(m.crest_factor, 3));
+  setText('dsp-kurt', fmt(m.kurtosis, 3));
+  setText('dsp-skew', fmt(m.skewness, 3));
+
+  // RMS deviation
+  const dev = m.rms_deviation;
+  const devStr = dev !== null && dev !== undefined ? `+${dev.toFixed(2)}σ` : '—';
+  setText('dsp-rms-dev', `baseline deviation: ${devStr}`);
+  colourValueByThreshold('dsp-rms', m.rms, 5.0);
+  colourValueByThreshold('dsp-crest', m.crest_factor, 4.0);
+  colourValueByThreshold('dsp-kurt', m.kurtosis, 3.0);
+
+  // Frequency
+  const freq = msg.fft_bins && msg.fft_bins.dominant_hz ? msg.fft_bins.dominant_hz : m.dominant_frequency_hz;
+  setText('dsp-freq', fmt(freq, 1));
+  if (msg.fft_bins) {
+    const cent = msg.fft_bins.spectral_centroid_hz;
+    setText('dsp-centroid', fmt(cent, 1));
+    const spEnergy = (msg.fft_bins.dominant_amplitude || 0);
+    setText('dsp-energy', fmt(m.spectral_energy, 3));
+  }
+
+  // Health gauge
+  const score = msg.health_score;
+  updateHealthGauge(score);
+  updateRiskBadge(msg.risk_state);
+
+  // Meta
+  setText('rev-count', msg.revolution_index || '—');
+  setText('consec-abn', m.consecutive_abnormal || 0);
+
+  const anom = msg.anomaly_detected;
+  const anomCell = document.getElementById('anomaly-cell');
+  anomCell.textContent = anom ? '⚠ YES' : 'NO';
+  anomCell.className = 'mt-value ' + (anom ? 'elevated' : '');
+
+  setText('rms-dev-cell', devStr);
+  setText('provenance-cell', msg.data_provenance || '—');
+  const ts = msg.timestamp_utc ? msg.timestamp_utc.slice(11, 19) + ' UTC' : '—';
+  setText('last-updated-cell', ts);
+
+  // FFT spectrum
+  if (msg.fft_bins && msg.fft_bins.frequencies && msg.fft_bins.amplitudes) {
+    lastFFTData = msg.fft_bins;
+    drawFFT(msg.fft_bins.frequencies, msg.fft_bins.amplitudes, msg.fft_bins.dominant_hz);
+    const nyquist = msg.fft_bins.frequencies.length > 1 ?
+      Math.round(msg.fft_bins.frequencies[msg.fft_bins.frequencies.length - 1]) : 500;
+    document.getElementById('fft-nyquist').textContent = `${nyquist} Hz (Nyquist)`;
+    document.getElementById('fft-dom-label').textContent = `DOM: ${fmt(msg.fft_bins.dominant_hz,1)} Hz`;
+    document.getElementById('fft-stat-dom').textContent = `DOM: ${fmt(msg.fft_bins.dominant_hz,1)} Hz`;
+    document.getElementById('fft-stat-cent').textContent = `CENT: ${fmt(msg.fft_bins.spectral_centroid_hz,1)} Hz`;
+  }
+
+  // Baseline status
+  updateBaselineStatus(msg.baseline_status);
+
+  // Joint matrix
+  updateJointMatrix(msg.joint_id, msg.joint_code, msg.risk_state, score, msg.revolution_index);
+
+  // Log
+  const riskCls = `log-risk-${msg.risk_state}`;
+  logEntry(
+    msg.timestamp_utc,
+    `[HEALTH] ${msg.joint_code} rev#${msg.revolution_index} ` +
+    (msg.anomaly_detected ? '⚠ANOMALY ' : ''),
+    `H:${fmt(score,1)} ${msg.risk_state}`,
+    riskCls
+  );
+}
+
+function handleAlertTriggered(msg) {
+  // Update alert count badge
+  incrementAlertBadge();
+
+  // Add to alert list
+  prependAlert({
+    id: msg.alert_id,
+    severity: msg.severity,
+    alert_type: msg.alert_type,
+    joint_id: msg.joint_id,
+    joint_code: msg.joint_code,
+    triggered_at_utc: msg.triggered_at_utc,
+    data_provenance: msg.data_provenance,
+    is_acknowledged: 0,
+  });
+
+  logEntry(
+    msg.triggered_at_utc,
+    `[ALERT] ${msg.severity} — ${msg.alert_type} — ${msg.joint_code}`,
+    '',
+    'log-risk-' + (msg.severity === 'CRITICAL' ? 'CRITICAL' : 'WARNING')
+  );
+}
+
+// ── UI Helpers ────────────────────────────────────────────────────────────
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = (val !== null && val !== undefined) ? val : '—';
+}
+
+function fmt(v, dec=2) {
+  if (v === null || v === undefined || v === '') return '—';
+  const n = parseFloat(v);
+  return isNaN(n) ? '—' : n.toFixed(dec);
+}
+
+function colourValueByThreshold(id, value, threshold) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const v = parseFloat(value);
+  if (isNaN(v)) { el.style.color = 'var(--text-primary)'; return; }
+  if (v >= threshold * 1.5) el.style.color = 'var(--risk-critical)';
+  else if (v >= threshold) el.style.color = 'var(--risk-warning)';
+  else el.style.color = 'var(--text-primary)';
+}
+
+function updateStreamBadge(prov) {
+  const badge = document.getElementById('stream-badge');
+  if (prov === 'SIMULATION') {
+    badge.className = 'badge badge-sim';
+    document.getElementById('stream-text').textContent = 'SIMULATION';
+  } else if (prov === 'LIVE') {
+    badge.className = 'badge badge-connected';
+    document.getElementById('stream-text').textContent = 'LIVE HARDWARE';
+  }
+}
+
+function updateSimBanner(show) {
+  document.getElementById('sim-banner').classList.toggle('visible', show);
+}
+
+// ── Health Gauge ─────────────────────────────────────────────────────────
+function updateHealthGauge(score) {
+  const circle = document.getElementById('gauge-fill');
+  const number = document.getElementById('gauge-number');
+  const circumference = 327; // 2π × 52
+
+  if (score === null || score === undefined) {
+    number.textContent = '—';
+    circle.style.strokeDashoffset = circumference;
+    return;
+  }
+
+  const s = Math.max(0, Math.min(100, score));
+  number.textContent = Math.round(s);
+
+  const offset = circumference * (1 - s / 100);
+  circle.style.strokeDashoffset = offset;
+
+  let colour;
+  if (s >= 90) colour = 'var(--risk-normal)';
+  else if (s >= 75) colour = 'var(--risk-watch)';
+  else if (s >= 50) colour = 'var(--risk-warning)';
+  else colour = 'var(--risk-critical)';
+  circle.style.stroke = colour;
+}
+
+function updateRiskBadge(risk) {
+  const el = document.getElementById('current-risk-badge');
+  el.className = `risk-badge risk-${risk}`;
+  el.textContent = risk || '—';
+}
+
+function updateBaselineStatus(status) {
+  const box = document.getElementById('baseline-status-box');
+  const text = document.getElementById('baseline-status-text');
+  box.className = `baseline-status baseline-${status || 'INSUFFICIENT'}`;
+  text.textContent = `BASELINE: ${status || 'INSUFFICIENT'}`;
+}
+
+// ── FFT Chart ─────────────────────────────────────────────────────────────
+function drawFFT(frequencies, amplitudes, dominantHz) {
+  const canvas = document.getElementById('fft-canvas');
+  const noData = document.getElementById('fft-no-data');
+  noData.style.display = 'none';
+
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  ctx.scale(dpr, dpr);
+
+  const W = rect.width, H = rect.height;
+  const pad = { top: 8, right: 8, bottom: 20, left: 40 };
+  const chartW = W - pad.left - pad.right;
+  const chartH = H - pad.top - pad.bottom;
+
+  ctx.clearRect(0, 0, W, H);
+
+  if (!frequencies || frequencies.length === 0) return;
+
+  const maxAmp = Math.max(...amplitudes, 0.001);
+  const freqMax = frequencies[frequencies.length - 1];
+
+  // Grid
+  ctx.strokeStyle = 'rgba(30,45,71,0.6)';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (chartH / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(pad.left + chartW, y);
+    ctx.stroke();
+  }
+
+  // Y axis labels
+  ctx.fillStyle = 'rgba(74,94,130,0.8)';
+  ctx.font = '9px JetBrains Mono, monospace';
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (chartH / 4) * i;
+    const val = maxAmp * (1 - i / 4);
+    ctx.fillText(val.toFixed(3), pad.left - 3, y + 3);
+  }
+
+  // Dominant frequency line
+  if (dominantHz) {
+    const domX = pad.left + (dominantHz / freqMax) * chartW;
+    ctx.strokeStyle = 'rgba(239,68,68,0.6)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(domX, pad.top);
+    ctx.lineTo(domX, pad.top + chartH);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = 'rgba(239,68,68,0.8)';
+    ctx.font = '9px JetBrains Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${dominantHz.toFixed(1)}Hz`, domX, pad.top - 2);
+  }
+
+  // FFT spectrum (filled area)
+  const gradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
+  gradient.addColorStop(0, 'rgba(37,99,235,0.7)');
+  gradient.addColorStop(1, 'rgba(37,99,235,0.05)');
+
+  ctx.beginPath();
+  ctx.moveTo(pad.left, pad.top + chartH);
+
+  for (let i = 0; i < frequencies.length; i++) {
+    const x = pad.left + (frequencies[i] / freqMax) * chartW;
+    const y = pad.top + chartH - (amplitudes[i] / maxAmp) * chartH;
+    if (i === 0) ctx.lineTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+
+  ctx.lineTo(pad.left + chartW, pad.top + chartH);
+  ctx.closePath();
+  ctx.fillStyle = gradient;
+  ctx.fill();
+
+  // Spectrum line on top
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(6,182,212,0.9)';
+  ctx.lineWidth = 1.5;
+  let first = true;
+  for (let i = 0; i < frequencies.length; i++) {
+    const x = pad.left + (frequencies[i] / freqMax) * chartW;
+    const y = pad.top + chartH - (amplitudes[i] / maxAmp) * chartH;
+    if (first) { ctx.moveTo(x, y); first = false; }
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+}
+
+// ── Joint Matrix ──────────────────────────────────────────────────────────
+function updateJointMatrix(jointId, jointCode, riskState, healthScore, revIdx) {
+  if (!jointId || !jointCode) return;
+
+  jointRegistry[jointId] = { code: jointCode, risk: riskState, health: healthScore, rev: revIdx };
+  document.getElementById('joint-count').textContent = `${Object.keys(jointRegistry).length} joint(s)`;
+
+  const container = document.getElementById('joint-matrix');
+
+  let tile = document.getElementById(`joint-tile-${jointId}`);
+  if (!tile) {
+    tile = document.createElement('div');
+    tile.id = `joint-tile-${jointId}`;
+    tile.className = 'joint-tile';
+    tile.onclick = () => selectJoint(jointId);
+    tile.innerHTML = `
+      <div class="joint-code">${jointCode}</div>
+      <div class="joint-health-score" id="jhs-${jointId}">—</div>
+      <div class="joint-risk-label" id="jrl-${jointId}">—</div>
+      <div style="font-size:9px;color:var(--text-muted);margin-left:6px;margin-top:4px" id="jrev-${jointId}">rev —</div>
+    `;
+    // Remove placeholder if present
+    const placeholder = container.querySelector('[style*="grid-column"]');
+    if (placeholder) placeholder.remove();
+    container.appendChild(tile);
+  }
+
+  tile.className = `joint-tile risk-${riskState}`;
+  if (healthScore !== null && healthScore !== undefined) {
+    document.getElementById(`jhs-${jointId}`).textContent = Math.round(healthScore);
+  }
+  document.getElementById(`jrl-${jointId}`).textContent = riskState;
+  document.getElementById(`jrev-${jointId}`).textContent = `rev ${revIdx || '—'}`;
+}
+
+function selectJoint(jointId) {
+  document.querySelectorAll('.joint-tile').forEach(t => t.classList.remove('selected'));
+  const tile = document.getElementById(`joint-tile-${jointId}`);
+  if (tile) tile.classList.add('selected');
+}
+
+// ── Alert System ──────────────────────────────────────────────────────────
+let alertCount = 0;
+
+function incrementAlertBadge() {
+  alertCount++;
+  const badge = document.getElementById('alert-count-badge');
+  badge.className = 'badge badge-disconnected';
+  document.getElementById('alert-count-text').textContent = alertCount;
+}
+
+function prependAlert(alert) {
+  const list = document.getElementById('alert-list');
+  const noAlert = list.querySelector('.no-alerts');
+  if (noAlert) noAlert.remove();
+
+  const item = buildAlertItem(alert);
+  list.insertBefore(item, list.firstChild);
+
+  // Cap list at 50
+  while (list.children.length > 50) list.removeChild(list.lastChild);
+}
+
+function buildAlertItem(alert) {
+  const div = document.createElement('div');
+  div.id = `alert-${alert.id}`;
+  div.className = `alert-item sev-${alert.severity}`;
+
+  const prov = alert.data_provenance;
+  const provSpan = prov === 'SIMULATION' ?
+    `<span class="alert-provenance prov-SIMULATION">SIM</span>` :
+    `<span class="alert-provenance prov-LIVE">LIVE</span>`;
+
+  const ackHtml = alert.is_acknowledged ?
+    `<span class="acked-chip">acked</span>` :
+    `<button class="ack-btn" onclick="acknowledgeAlert('${alert.id}', this)">ACK</button>`;
+
+  const typeLabel = (alert.alert_type || '').replace(/_/g, ' ');
+  const ts = alert.triggered_at_utc ? alert.triggered_at_utc.slice(11, 19) + ' UTC' : '—';
+
+  div.innerHTML = `
+    <span class="alert-sev-chip">${alert.severity}</span>
+    <div class="alert-body">
+      <div class="alert-type">${typeLabel} ${provSpan}</div>
+      <div class="alert-joint">${alert.joint_code || alert.joint_id}</div>
+      <div class="alert-time">${ts}</div>
+    </div>
+    ${ackHtml}
+  `;
+  return div;
+}
+
+async function refreshAlerts() {
+  try {
+    const resp = await fetch(`${API}/alerts?unacknowledged_only=true&limit=50`);
+    const data = await resp.json();
+    const list = document.getElementById('alert-list');
+    list.innerHTML = '';
+    alertCount = data.total;
+    document.getElementById('alert-count-text').textContent = alertCount;
+    if (!data.alerts || data.alerts.length === 0) {
+      list.innerHTML = '<div class="no-alerts">NO ACTIVE ALERTS — System Normal</div>';
+      document.getElementById('alert-count-badge').className = 'badge badge-neutral';
+      return;
+    }
+    document.getElementById('alert-count-badge').className = 'badge badge-disconnected';
+    data.alerts.forEach(a => list.appendChild(buildAlertItem(a)));
+  } catch (e) {
+    logEntry(null, `Alert refresh failed: ${e.message}`, '', 'log-risk-WARNING');
+  }
+}
+
+async function acknowledgeAlert(alertId, btn) {
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const resp = await fetch(`${API}/alerts/${alertId}/acknowledge?acknowledged_by=SCADA_HMI`, {method:'POST'});
+    const data = await resp.json();
+    if (data.status === 'acknowledged' || data.status === 'already_acknowledged') {
+      const item = document.getElementById(`alert-${alertId}`);
+      if (item) {
+        const btnEl = item.querySelector('.ack-btn');
+        if (btnEl) { const chip = document.createElement('span'); chip.className = 'acked-chip'; chip.textContent = 'acked'; btnEl.replaceWith(chip); }
+      }
+      alertCount = Math.max(0, alertCount - 1);
+      document.getElementById('alert-count-text').textContent = alertCount;
+    }
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'ACK';
+  }
+}
+
+// ── Fault Simulation ──────────────────────────────────────────────────────
+async function runFaultSim(faultMode) {
+  let jointId = document.getElementById('sim-joint-id') ? document.getElementById('sim-joint-id').value.trim() : '';
+  if (!jointId) {
+    const passSel = document.getElementById('passport-joint-selector');
+    if (passSel && passSel.value) jointId = passSel.value;
+  }
+  const sensorId = 'sim-accel-p3-01';
+  const status = document.getElementById('sim-status');
+
+  // Validate sensor + device exist (best-effort auto-create if not)
+  await ensureSimEntities(sensorId);
+
+  const params = new URLSearchParams({
+    sensor_id: sensorId,
+    fault_mode: faultMode,
+    sample_count: 1000,
+    sampling_rate_hz: 1000.0,
+  });
+  if (jointId) params.set('joint_id', jointId);
+
+  status.style.color = 'var(--sim-color)';
+  status.textContent = `▶ Sending ${faultMode}...`;
+
+  try {
+    const resp = await fetch(`${API}/telemetry/simulate/generate-fault?${params}`, {method:'POST'});
+    const data = await resp.json();
+    if (resp.ok) {
+      status.style.color = 'var(--risk-normal)';
+      status.textContent = `✓ ${faultMode} burst ingested. ID: ${data.id.slice(0,12)}... seq#${data.sequence_number}`;
+    } else {
+      status.style.color = 'var(--risk-critical)';
+      status.textContent = `✗ Error: ${JSON.stringify(data.detail || data)}`;
+    }
+  } catch (e) {
+    status.style.color = 'var(--risk-critical)';
+    status.textContent = `✗ ${e.message}`;
+  }
+}
+
+let continuousStreamInterval = null;
+function toggleContinuousStream() {
+  const btn = document.getElementById('stream-toggle-btn');
+  const icon = document.getElementById('stream-toggle-icon');
+  const text = document.getElementById('stream-toggle-text');
+
+  if (continuousStreamInterval) {
+    clearInterval(continuousStreamInterval);
+    continuousStreamInterval = null;
+    btn.style.background = 'var(--sim-color)';
+    icon.textContent = '▶';
+    text.textContent = 'START DEMO STREAM';
+    logEntry(null, 'Continuous demo stream stopped', 'STOPPED', 'log-risk-NORMAL');
+  } else {
+    // Modes to cycle through for realistic demonstration: mostly NORMAL with periodic fatigue/impact
+    let modes = ['NORMAL', 'NORMAL', 'NORMAL', 'SPLICE_IMPACT', 'NORMAL', 'HARMONIC_LOOSENESS'];
+    let idx = 0;
+    runFaultSim('NORMAL');
+    continuousStreamInterval = setInterval(() => {
+      const mode = modes[idx % modes.length];
+      runFaultSim(mode);
+      idx++;
+    }, 1500);
+    btn.style.background = 'var(--risk-critical)';
+    icon.textContent = '⏹';
+    text.textContent = 'STOP DEMO STREAM';
+    logEntry(null, 'Continuous demo stream started (1.5s interval)', 'STREAMING', 'log-risk-NORMAL');
+  }
+}
+
+async function ensureSimEntities(sensorId) {
+  // Register simulator device and sensor if they don't exist
+  try {
+    await fetch(`${API}/devices`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        id:'test-rig-simulator-01', name:'SCADA Sim Device',
+        device_type:'TEST_RIG_EMULATOR', is_trusted_hardware:false, status:'ACTIVE'
+      })
+    });
+  } catch {}
+  try {
+    await fetch(`${API}/sensors`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        id: sensorId, sensor_type:'ACCELEROMETER',
+        sampling_rate_hz: 1000.0, output_protocol:'SPI', status:'ACTIVE'
+      })
+    });
+  } catch {}
+}
+
+// ── Vision Engine & SCADA Optical Monitoring ─────────────────────────────
+let availableTestSamples = [];
+let visionStatus = null;
+
+async function initVisionUI() {
+  try {
+    // 1. Fetch vision engine status
+    const statusResp = await fetch(`${API}/vision/status`);
+    if (statusResp.ok) {
+      visionStatus = await statusResp.json();
+      const stBadge = document.getElementById('vision-model-status-badge');
+      const stText = document.getElementById('vision-model-status-text');
+      stText.textContent = visionStatus.model_status;
+      if (visionStatus.model_status === 'TRAINED_MODEL') {
+        stBadge.className = 'badge badge-connected';
+      } else if (visionStatus.model_status === 'CLASSICAL_CV_BASELINE') {
+        stBadge.className = 'badge badge-sim';
+      } else {
+        stBadge.className = 'badge badge-disconnected';
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to fetch vision status', e);
+  }
+
+  try {
+    // 2. Fetch test samples catalog
+    const samplesResp = await fetch(`${API}/vision/test-samples`);
+    if (samplesResp.ok) {
+      const data = await samplesResp.json();
+      availableTestSamples = data.samples || [];
+      const sel = document.getElementById('vision-test-sample-select');
+      sel.innerHTML = '';
+      if (availableTestSamples.length === 0) {
+        sel.innerHTML = '<option value="">No test samples found</option>';
+      } else {
+        availableTestSamples.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s;
+          opt.textContent = s.length > 32 ? s.slice(0, 16) + '...' + s.slice(-12) : s;
+          sel.appendChild(opt);
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to load test samples', e);
+  }
+}
+
+function populateJointSelectors(joints) {
+  const visSel = document.getElementById('vision-joint-select');
+  const passSel = document.getElementById('passport-joint-selector');
+  const simSel = document.getElementById('sim-joint-id');
+  if (!visSel || !passSel) return;
+
+  visSel.innerHTML = '<option value="">-- No Joint Linked --</option>';
+  passSel.innerHTML = '<option value="">Select Joint...</option>';
+  if (simSel) simSel.innerHTML = '<option value="">-- Auto-Assign to Active Joint --</option>';
+
+  joints.forEach(j => {
+    const opt1 = document.createElement('option');
+    opt1.value = j.joint_code || j.id;
+    opt1.textContent = `${j.joint_code || j.id} (${j.current_risk})`;
+    visSel.appendChild(opt1);
+
+    const opt2 = document.createElement('option');
+    opt2.value = j.id;
+    opt2.textContent = `${j.joint_code || j.id} [${j.current_risk}]`;
+    passSel.appendChild(opt2);
+
+    if (simSel) {
+      const opt3 = document.createElement('option');
+      opt3.value = j.id;
+      opt3.textContent = `${j.joint_code || j.id} [${j.current_risk}]`;
+      simSel.appendChild(opt3);
+    }
+  });
+
+  if (joints.length > 0) {
+    passSel.value = joints[0].id;
+    if (simSel) simSel.value = joints[0].id;
+    loadJointPassport(joints[0].id);
+  }
+}
+
+async function runTestSampleInference() {
+  const sampleName = document.getElementById('vision-test-sample-select').value;
+  if (!sampleName) {
+    alert('Please select a test image from the dropdown.');
+    return;
+  }
+  const cameraId = document.getElementById('vision-camera-select').value || 'CAM-SPLICE-01';
+  const jointCode = document.getElementById('vision-joint-select').value || '';
+  const confThreshold = document.getElementById('vision-conf-slider') ? document.getElementById('vision-conf-slider').value : 0.20;
+  const indicator = document.getElementById('vision-busy-indicator');
+  indicator.style.display = 'inline';
+
+  try {
+    const url = `${API}/vision/analyze?test_image_name=${encodeURIComponent(sampleName)}&camera_id=${encodeURIComponent(cameraId)}&joint_code=${encodeURIComponent(jointCode)}&source_type=RESEARCH_DATASET&conf_threshold=${encodeURIComponent(confThreshold)}`;
+    const resp = await fetch(url, { method: 'POST' });
+    const data = await resp.json();
+    indicator.style.display = 'none';
+
+    if (resp.ok) {
+      displayVisionAnalysisResult(data);
+      logEntry(data.timestamp_utc, `VISION: Analyzed test frame [${data.primary_damage_type}] conf:${(data.max_confidence * 100).toFixed(1)}%`, 'RESEARCH_DATASET', 'log-health');
+      if (jointCode) {
+        const curPassJoint = document.getElementById('passport-joint-selector').value;
+        if (curPassJoint) loadJointPassport(curPassJoint);
+      }
+    } else {
+      alert(`Vision inference error: ${data.detail || JSON.stringify(data)}`);
+    }
+  } catch (e) {
+    indicator.style.display = 'none';
+    alert(`Inference failed: ${e.message}`);
+  }
+}
+
+async function uploadCustomFrame(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  const cameraId = document.getElementById('vision-camera-select').value || 'CAM-SPLICE-01';
+  const jointCode = document.getElementById('vision-joint-select').value || '';
+  const confThreshold = document.getElementById('vision-conf-slider') ? document.getElementById('vision-conf-slider').value : 0.20;
+  const indicator = document.getElementById('vision-busy-indicator');
+  indicator.style.display = 'inline';
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('frame_file', file);
+
+  try {
+    const url = `${API}/vision/analyze?camera_id=${encodeURIComponent(cameraId)}&joint_code=${encodeURIComponent(jointCode)}&source_type=LIVE_CAMERA&conf_threshold=${encodeURIComponent(confThreshold)}`;
+    const resp = await fetch(url, { method: 'POST', body: formData });
+    const data = await resp.json();
+    indicator.style.display = 'none';
+    if (resp.ok) {
+      displayVisionAnalysisResult(data);
+      logEntry(data.timestamp_utc, `VISION: Analyzed custom frame [${data.primary_damage_type}] (${file.name})`, 'LIVE_CAMERA', 'log-risk-NORMAL');
+      if (jointCode) {
+        const curPassJoint = document.getElementById('passport-joint-selector').value;
+        if (curPassJoint) loadJointPassport(curPassJoint);
+      }
+    } else {
+      alert(`Upload error: ${data.detail || JSON.stringify(data)}`);
+    }
+  } catch (e) {
+    indicator.style.display = 'none';
+    alert(`Upload failed: ${e.message}`);
+  }
+  input.value = '';
+}
+
+function displayVisionAnalysisResult(res) {
+  // 1. Viewport image
+  const img = document.getElementById('vision-display-img');
+  const ph = document.getElementById('vision-placeholder');
+  img.src = res.image_reference + `?t=${Date.now()}`;
+  img.style.display = 'block';
+  ph.style.display = 'none';
+
+  // 2. Metadata & Source
+  const frameLabel = res.frame_name || 'custom_frame';
+  document.getElementById('vision-frame-meta').textContent =
+    `Obs: ${res.observation_id} | File: ${frameLabel} | Model: ${res.model_version} (${res.model_status})`;
+
+  const srcBadge = document.getElementById('vision-source-type-badge');
+  const srcText = document.getElementById('vision-source-type-text');
+  srcText.textContent = `SOURCE: ${res.source_type}`;
+  srcBadge.className = 'badge ' + (res.source_type === 'RESEARCH_DATASET' ? 'badge-connected' : 'badge-sim');
+
+  const sevBadge = document.getElementById('vision-prototype-severity-badge');
+  sevBadge.className = `risk-badge risk-${res.prototype_severity || 'NORMAL'}`;
+  sevBadge.textContent = res.prototype_severity || 'NORMAL';
+
+  // 3. Stats
+  document.getElementById('primary-damage-type').textContent = res.primary_damage_type || 'NORMAL_SURFACE';
+  document.getElementById('peak-confidence-val').textContent = `${((res.max_confidence || 0) * 100).toFixed(2)}%`;
+  const sevVal = document.getElementById('prototype-severity-val');
+  sevVal.textContent = res.prototype_severity || 'NORMAL';
+  sevVal.className = `value-mono risk-${res.prototype_severity || 'NORMAL'}`;
+
+  // 4. Detections table
+  const tbody = document.getElementById('detection-table-body');
+  const countSpan = document.getElementById('det-count-span');
+  const dets = res.detections || [];
+  countSpan.textContent = dets.length;
+
+  if (dets.length === 0) {
+    const curConf = document.getElementById('vision-conf-slider') ? Math.round(document.getElementById('vision-conf-slider').value * 100) : 5;
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:14px">Normal belt surface — No damage detected above ${curConf}% confidence threshold.<br><span style="font-size:9.5px;color:var(--text-secondary);display:inline-block;margin-top:4px">If your uploaded frame contains subtle tears or joints, try lowering the "Min Conf" slider above and re-analyzing.</span></td></tr>`;
+  } else {
+    tbody.innerHTML = '';
+    dets.forEach(d => {
+      const tr = document.createElement('tr');
+      const safeClass = (d.class_name || 'damage').replace(/\s+/g, '-');
+      tr.innerHTML = `
+        <td><span class="det-tag det-${safeClass}">${d.class_name}</span></td>
+        <td style="color:var(--accent-cyan);font-weight:600">${(d.confidence * 100).toFixed(1)}%</td>
+        <td style="color:var(--text-muted)">[${d.bbox ? d.bbox.join(', ') : '—'}]</td>
+        <td style="color:var(--text-secondary)">${d.area_px || '—'}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+}
+
+function handleVisionUpdate(msg) {
+  displayVisionAnalysisResult(msg);
+  logEntry(
+    msg.timestamp_utc,
+    `VISION_UPDATE: ${msg.camera_id} detected ${msg.total_detections} damage object(s) [${msg.primary_damage_type}]`,
+    msg.source_type,
+    msg.prototype_severity === 'CRITICAL' ? 'log-risk-CRITICAL' : 'log-risk-NORMAL'
+  );
+  const curJointId = document.getElementById('passport-joint-selector').value;
+  if (curJointId) loadJointPassport(curJointId);
+}
+
+function handleMLAnomalyUpdate(msg) {
+  logEntry(
+    msg.timestamp,
+    `VIB-ML: ${msg.anomaly_decision ? 'ANOMALY DETECTED' : 'NORMAL'} score=${msg.raw_anomaly_score !== null ? msg.raw_anomaly_score.toFixed(4) : '—'} [${msg.model_version}]`,
+    'ML_EVIDENCE',
+    msg.anomaly_decision ? 'log-risk-WARNING' : 'log-risk-NORMAL'
+  );
+  const curJointId = document.getElementById('passport-joint-selector').value;
+  if (curJointId) loadJointPassport(curJointId);
+}
+
+// ── Multi-Evidence Joint Passport ─────────────────────────────────────────
+async function loadJointPassport(jointId) {
+  if (!jointId) return;
+  try {
+    const resp = await fetch(`${API}/joints/${encodeURIComponent(jointId)}/passport`);
+    if (!resp.ok) return;
+    const p = await resp.json();
+    const id = p.joint_identity || {};
+    const ev = p.evidence_sources || {};
+    const engine = p.joint_health_engine || {};
+
+    document.getElementById('passport-code-badge').textContent = id.joint_code || id.joint_id || 'J-XX';
+
+    const safetyBox = document.getElementById('pp-safety-box');
+    const safetyTitle = document.getElementById('pp-safety-title');
+    const safetyDesc = document.getElementById('pp-safety-desc');
+    const ruleTag = document.getElementById('pp-rule-tag');
+    const actBadge = document.getElementById('passport-safety-action');
+
+    actBadge.className = `risk-badge risk-${id.current_risk || 'NORMAL'}`;
+    actBadge.textContent = engine.recommended_action || 'CONTINUE_NORMAL_OPERATION';
+
+    if (engine.safety_status === 'CRITICAL_ACTION_REQUIRED') {
+      safetyBox.className = 'safety-rule-box rule-CRITICAL';
+      ruleTag.textContent = 'RULE: TRIP IMMEDIATE STOP';
+      ruleTag.style.color = 'var(--risk-critical)';
+      safetyTitle.textContent = 'SAFETY TRIP TRIGGERED — Critical Splice Hazard';
+      safetyDesc.textContent = 'Critical vibration anomaly or large longitudinal tear detected. Automatic safety interlock stops belt.';
+    } else if (engine.safety_status === 'WARNING_INVESTIGATION_REQUIRED') {
+      safetyBox.className = 'safety-rule-box rule-WARNING';
+      ruleTag.textContent = 'RULE: SLOW & INSPECT';
+      ruleTag.style.color = 'var(--risk-warning)';
+      safetyTitle.textContent = 'SAFETY ADVISORY — Inspection Required';
+      safetyDesc.textContent = 'Elevated vibration metrics or detectable surface damage. Recommend speed reduction and visual examination.';
+    } else {
+      safetyBox.className = 'safety-rule-box';
+      ruleTag.textContent = 'RULE: PASS';
+      ruleTag.style.color = 'var(--risk-normal)';
+      safetyTitle.textContent = 'Deterministic Safety Engine: Normal Operation';
+      safetyDesc.textContent = 'Vibration signals within baseline envelope; optical inspection normal. Belt clearance granted.';
+    }
+
+    // Vibration evidence
+    const vibe = ev.vibration_dsp_evidence || {};
+    const latestObs = vibe.latest_observation || {};
+    document.getElementById('passport-vibe-state').textContent = vibe.current_risk_state || 'NORMAL';
+    document.getElementById('pp-rms').textContent = latestObs.rms ? `${latestObs.rms.toFixed(4)} g` : '—';
+    document.getElementById('pp-crest').textContent = latestObs.crest_factor ? latestObs.crest_factor.toFixed(2) : '—';
+    document.getElementById('pp-kurt').textContent = latestObs.kurtosis ? latestObs.kurtosis.toFixed(2) : '—';
+    document.getElementById('pp-freq').textContent = latestObs.dominant_frequency_hz ? `${latestObs.dominant_frequency_hz.toFixed(1)} Hz` : '—';
+    document.getElementById('pp-health').textContent = `${(vibe.health_score || 100).toFixed(1)} / 100`;
+    document.getElementById('pp-baseline').textContent = vibe.baseline ? vibe.baseline.status : 'INSUFFICIENT';
+
+    // Vision evidence
+    const vis = ev.vision_optical_evidence || {};
+    if (vis.observation_id) {
+      document.getElementById('passport-vis-state').textContent = vis.prototype_severity || 'NORMAL';
+      document.getElementById('pp-vis-ts').textContent = vis.timestamp_utc ? vis.timestamp_utc.slice(11, 19) + ' UTC' : '—';
+      document.getElementById('pp-vis-status').textContent = vis.model_status || 'TRAINED_MODEL';
+      document.getElementById('pp-vis-damage').textContent = vis.primary_damage_type || 'NONE';
+      document.getElementById('pp-vis-conf').textContent = vis.max_confidence ? `${(vis.max_confidence * 100).toFixed(1)}%` : '—';
+      document.getElementById('pp-vis-count').textContent = vis.total_detections || 0;
+      document.getElementById('pp-vis-sev').textContent = vis.prototype_severity || 'NORMAL';
+    } else {
+      document.getElementById('passport-vis-state').textContent = 'NO_DATA';
+      document.getElementById('pp-vis-ts').textContent = 'No Inspection';
+      document.getElementById('pp-vis-status').textContent = '—';
+      document.getElementById('pp-vis-damage').textContent = 'None';
+      document.getElementById('pp-vis-conf').textContent = '—';
+      document.getElementById('pp-vis-count').textContent = '0';
+      document.getElementById('pp-vis-sev').textContent = 'NORMAL';
+    }
+
+    // Operational telemetry
+    const op = ev.operational_telemetry || {};
+    document.getElementById('pp-speed').textContent = op.belt_speed_mps ? `${op.belt_speed_mps} m/s` : '3.2 m/s';
+    document.getElementById('pp-load').textContent = op.motor_current_a ? `${op.motor_current_a} A` : '142.5 A';
+    document.getElementById('pp-btemp').textContent = op.bearing_temperature_c ? `${op.bearing_temperature_c} °C` : '58.1 °C';
+    document.getElementById('pp-atemp').textContent = op.ambient_temperature_c ? `${op.ambient_temperature_c} °C` : '34.2 °C';
+    document.getElementById('pp-revs').textContent = id.total_revolutions || '—';
+
+    // Vibration ML Evidence (Phase 4B)
+    const ml = ev.ml_anomaly_evidence || {};
+    const mlBadge = document.getElementById('passport-ml-badge');
+    const mlDecision = document.getElementById('pp-ml-decision');
+    const mlScore = document.getElementById('pp-ml-score');
+    const mlRegime = document.getElementById('pp-ml-regime');
+    const mlDev = document.getElementById('pp-ml-dev');
+    const mlVer = document.getElementById('pp-ml-version');
+
+    if (ml && ml.available) {
+      mlVer.textContent = ml.model_version || 'vibration-anomaly-v1';
+      if (ml.anomaly_decision === true) {
+        mlBadge.textContent = 'ANOMALY DETECTED';
+        mlBadge.style.color = 'var(--risk-warning)';
+        mlDecision.textContent = 'ANOMALY DETECTED';
+        mlDecision.style.color = 'var(--risk-warning)';
+      } else if (ml.anomaly_decision === false) {
+        mlBadge.textContent = 'NORMAL';
+        mlBadge.style.color = 'var(--risk-normal)';
+        mlDecision.textContent = 'NORMAL';
+        mlDecision.style.color = 'var(--risk-normal)';
+      } else if (ml.threshold_status === 'NOT_CALIBRATED') {
+        mlBadge.textContent = 'NOT CALIBRATED';
+        mlDecision.textContent = 'NOT CALIBRATED';
+        mlDecision.style.color = 'var(--text-muted)';
+      } else {
+        mlBadge.textContent = ml.model_status || 'WAITING CONTEXT';
+        mlDecision.textContent = ml.model_status || 'WAITING CONTEXT';
+        mlDecision.style.color = 'var(--text-muted)';
+      }
+
+      mlScore.textContent = (ml.raw_anomaly_score !== null && ml.raw_anomaly_score !== undefined)
+        ? ml.raw_anomaly_score.toFixed(4)
+        : '—';
+
+      if (ml.operating_regime) {
+        mlRegime.textContent = `${ml.operating_regime.speed_rpm || 0} RPM / ${ml.operating_regime.pretension_n || 0} N`;
+      } else {
+        mlRegime.textContent = '—';
+      }
+
+      if (ml.baseline_deviation && ml.baseline_deviation.length > 0) {
+        mlDev.innerHTML = ml.baseline_deviation.slice(0, 2).map(d => {
+          const sign = d.standardized_deviation >= 0 ? '+' : '';
+          const feat = d.feature.replace('driver_', '').replace('driven_', '');
+          return `<div>${feat}: ${sign}${d.standardized_deviation.toFixed(1)}σ</div>`;
+        }).join('');
+      } else {
+        mlDev.textContent = 'Within envelope';
+      }
+    } else {
+      mlBadge.textContent = 'UNAVAILABLE';
+      mlDecision.textContent = 'UNAVAILABLE';
+      mlDecision.style.color = 'var(--text-muted)';
+      mlScore.textContent = '—';
+      mlRegime.textContent = '—';
+      mlDev.textContent = '—';
+    }
+
+  } catch (e) {
+    console.warn('Failed to load joint passport', e);
+  }
+}
+
+// ── Phase 5: Hardware DAQ, Lifecycle & Maintenance ──────────────────────────
+async function fetchSerialStatus() {
+  try {
+    const res = await fetch(`${API}/hardware/serial/status`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const portStatus = document.getElementById('daq-port-status');
+    if (data.connected) {
+      portStatus.className = 'badge badge-connected';
+      portStatus.textContent = 'CONNECTED';
+    } else {
+      portStatus.className = 'badge badge-disconnected';
+      portStatus.textContent = data.running ? 'LISTENING' : 'STANDBY';
+    }
+    setText('daq-port-baud', `${data.port} @ ${data.baudrate}`);
+    setText('daq-packets-read', (data.packets_read || 0).toLocaleString());
+    const bytes = data.bytes_read || 0;
+    const bytesFmt = bytes > 1048576 ? (bytes / 1048576).toFixed(2) + ' MB' : (bytes > 1024 ? (bytes / 1024).toFixed(1) + ' KB' : bytes + ' B');
+    setText('daq-bytes-read', bytesFmt);
+  } catch (e) {
+    console.debug('Serial status poll failed', e);
+  }
+}
+
+async function fetchJointLifecycle(jointId) {
+  if (!jointId) return;
+  try {
+    const res = await fetch(`${API}/joints/${encodeURIComponent(jointId)}/lifecycle`);
+    if (!res.ok) return;
+    const data = await res.json();
+    setText('lc-joint-code', `${data.joint_code} (${data.joint_id})`);
+    setText('lc-splice-type', data.splice_type || 'Finger Splice');
+    setText('lc-total-revs', (data.total_revolutions_count || 0).toLocaleString());
+    setText('lc-est-hours', `${data.operational_exposure.estimated_runtime_hours} hrs`);
+    setText('lc-stress-class', data.operational_exposure.cycle_stress_class || 'NOMINAL');
+
+    const trend = data.degradation_trend;
+    const trendBadge = document.getElementById('lifecycle-trend-badge');
+    if (trend.trend_status === 'INSUFFICIENT_HISTORY') {
+      trendBadge.style.background = 'rgba(139,92,246,0.15)';
+      trendBadge.style.color = 'var(--sim-color)';
+      trendBadge.textContent = 'INSUFFICIENT_HISTORY';
+      setText('lc-rms-slope', '—');
+      setText('lc-trend-dir', 'NEEDS >4 REVS');
+    } else {
+      trendBadge.style.background = trend.trend_direction === 'ACCELERATING' ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)';
+      trendBadge.style.color = trend.trend_direction === 'ACCELERATING' ? 'var(--risk-critical)' : 'var(--risk-normal)';
+      trendBadge.textContent = trend.trend_status;
+      const slope = trend.rms_change_per_revolution;
+      setText('lc-rms-slope', `${slope > 0 ? '+' : ''}${slope.toFixed(4)} g/rev`);
+      setText('lc-trend-dir', trend.trend_direction);
+    }
+    setText('lc-guardrail-msg', trend.message);
+
+    // Render recent maintenance
+    const mList = (data.evidence_synthesis && data.evidence_synthesis.recent_maintenance) || [];
+    const histEl = document.getElementById('maint-history');
+    if (mList.length === 0) {
+      histEl.innerHTML = '<div style="color:var(--text-muted);font-style:italic">No recent maintenance recorded.</div>';
+    } else {
+      histEl.innerHTML = mList.map(m => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;border-bottom:1px dashed rgba(30,45,71,0.5)">
+          <span><strong>${m.action_type}</strong> (${m.technician_id})</span>
+          <span class="value-mono" style="font-size:8.5px;color:var(--accent-cyan)">${m.record_hash.slice(0, 10)}...</span>
+        </div>
+      `).join('');
+    }
+  } catch (e) {
+    console.debug('Joint lifecycle fetch failed', e);
+  }
+}
+
+async function handleMaintenanceSubmit(event) {
+  event.preventDefault();
+  const techId = document.getElementById('maint-tech').value.trim();
+  const actionType = document.getElementById('maint-action').value;
+  const notes = document.getElementById('maint-notes').value.trim();
+  const resetBaseline = document.getElementById('maint-reset-baseline').checked;
+  const curJointId = document.getElementById('passport-joint-selector').value || 'joint-001';
+  const btn = document.getElementById('maint-submit-btn');
+
+  if (!techId) return;
+
+  btn.disabled = true;
+  btn.textContent = 'COMMITTING SHA-256...';
+
+  try {
+    const res = await fetch(`${API}/maintenance/log`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        joint_id: curJointId,
+        technician_id: techId,
+        action_type: actionType,
+        notes: notes,
+        baseline_reset: resetBaseline,
+        data_provenance: simulationMode ? 'SIMULATION' : 'LIVE'
+      })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      logEntry(null, `MAINTENANCE SIGNED: ${actionType} by ${techId} (hash: ${data.record_hash.slice(0, 8)})`, 'COMMITTED', 'log-risk-NORMAL');
+      document.getElementById('maint-notes').value = '';
+      document.getElementById('maint-reset-baseline').checked = false;
+      await fetchJointLifecycle(curJointId);
+      await loadJointPassport(curJointId);
+    } else {
+      const err = await res.json();
+      alert(`Maintenance submission failed: ${err.detail || 'Unknown error'}`);
+    }
+  } catch (e) {
+    alert(`Maintenance submission network error: ${e.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'COMMIT MAINTENANCE SIGN-OFF';
+  }
+}
+
+function handleMaintenanceLogged(msg) {
+  logEntry(msg.timestamp_utc, `MAINTENANCE LOGGED: ${msg.action_type} for ${msg.joint_code} by ${msg.technician_id}`, 'VERIFIED', 'log-risk-NORMAL');
+  const curJointId = document.getElementById('passport-joint-selector').value || 'joint-001';
+  if (msg.joint_id === curJointId) {
+    fetchJointLifecycle(msg.joint_id);
+    loadJointPassport(msg.joint_id);
+  }
+}
+
+async function initPhase5UI() {
+  await fetchSerialStatus();
+  setInterval(fetchSerialStatus, 5000);
+  const curJointId = document.getElementById('passport-joint-selector').value || 'joint-001';
+  await fetchJointLifecycle(curJointId);
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────
+async function bootstrap() {
+  connectWS();
+  await refreshAlerts();
+  await initVisionUI();
+  // Load joints
+  try {
+    const resp = await fetch(`${API}/joints`);
+    const joints = await resp.json();
+    if (joints && joints.length) {
+      joints.forEach(j => {
+        updateJointMatrix(j.id, j.joint_code, j.current_risk, null, j.total_revolutions_count);
+      });
+      populateJointSelectors(joints);
+      logEntry(null, `Loaded ${joints.length} joint(s) from registry`);
+    }
+  } catch {}
+  await initPhase5UI();
+}
+
+window.addEventListener('load', bootstrap);
+window.addEventListener('resize', () => {
+  if (lastFFTData) {
+    drawFFT(lastFFTData.frequencies, lastFFTData.amplitudes, lastFFTData.dominant_hz);
+  }
+});
+</script>
+
+</body>
+</html>

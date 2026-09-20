@@ -1,0 +1,12 @@
+path: C:/Users/Nikhil/Documents/sih hardware prototype/data/processed/research/conveyor_belt_damage_vision/yolo_dataset
+train: train/images
+val: valid/images
+test: test/images
+
+names:
+  0: damage
+  1: Belt Joint
+  2: Large Hole
+  3: Large Tear
+  4: Small Hole
+  5: Small Tear

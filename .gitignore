@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Runtime database
+*.db
+*.db-wal
+*.db-shm
+
+# Secrets
+.env
+.env.*
+
+# ML model binaries
+*.pt
+*.pth
+*.joblib
+
+# Training outputs
+**/runs/
+
+# Large raw research data
+data/raw/research/
+
+# Large generated datasets
+data/raw/synthetic/
+dataset/Conveyor Belt Damage.v1i.coco.zip
+dataset/conveyor_fault_dataset_v2.csv
+
+# Processed/generated vision images
+data/processed/research/conveyor_belt_damage_vision/analyzed_frames/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

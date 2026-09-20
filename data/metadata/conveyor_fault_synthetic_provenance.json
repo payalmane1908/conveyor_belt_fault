@@ -1,0 +1,49 @@
+{
+  "provenance_version": "1.0.0",
+  "dataset_identity": {
+    "dataset_name": "conveyor_fault_simulation",
+    "title": "Synthetic Multi-Fault Conveyor Belt Telemetry Dataset",
+    "source_type": "SYNTHETIC_SIMULATION",
+    "dataset_type": "simulation",
+    "generator": "In-house numerical physics simulation model",
+    "created_phase": "Phase 1 / Phase 2 exploratory development",
+    "license": "Internal project proprietary / testing use only"
+  },
+  "scientific_domain_limitations": {
+    "is_real_field_data": false,
+    "disclaimer": "This dataset was synthetically generated through numerical signal equations to test ingestion routers, SQLite schema indexing, WebSocket bandwidth, and UI threshold crossings. Under no circumstances must this synthetic data be reported as empirical field performance or genuine mining conveyor measurements.",
+    "authorized_uses": [
+      "Unit testing and integration testing",
+      "API and WebSocket throughput stress-testing",
+      "SCADA HMI fault demonstration prior to physical sensor hardware deployment",
+      "Multi-class fault classification architecture verification"
+    ],
+    "prohibited_claims": [
+      "Claiming ML models trained on this data achieve field-proven 97%+ accuracy on real conveyors",
+      "Presenting this dataset as physical iron-ore conveyor joint measurements"
+    ]
+  },
+  "specifications": {
+    "total_rows": 12000,
+    "stratified_splits": {
+      "train": 8400,
+      "validation": 1800,
+      "test": 1800,
+      "split_ratio": "70% train / 15% validation / 15% test"
+    },
+    "fault_classes": [
+      "normal",
+      "ball bearing",
+      "central shaft",
+      "pulley",
+      "drive motor",
+      "idler roller fault",
+      "belt slippage",
+      "joint_damage"
+    ]
+  },
+  "storage_locations": {
+    "raw_artifact": "data/raw/synthetic/conveyor_fault_simulation/conveyor_fault_dataset_v2.csv",
+    "processed_features": "data/processed/synthetic/conveyor_fault_simulation/cleaned_synthetic_features.csv"
+  }
+}

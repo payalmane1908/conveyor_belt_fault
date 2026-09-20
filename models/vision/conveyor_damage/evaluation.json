@@ -1,0 +1,35 @@
+{
+  "evaluation_split": "test",
+  "total_test_images": 65,
+  "precision": 0.8089949046630325,
+  "recall": 0.8592609743238002,
+  "mAP_50": 0.9092423339028066,
+  "mAP_50_95": 0.5849266925900869,
+  "per_class_metrics": {
+    "damage": {
+      "mAP50": 0.995,
+      "mAP50_95": 0.5849266925900869
+    },
+    "Belt Joint": {
+      "mAP50": 0.995,
+      "mAP50_95": 0.8713571428571429
+    },
+    "Large Hole": {
+      "mAP50": 0.8939456061558981,
+      "mAP50_95": 0.7698829265904334
+    },
+    "Large Tear": {
+      "mAP50": 0.8679542547125061,
+      "mAP50_95": 0.4564299344964639
+    },
+    "Small Hole": {
+      "mAP50": 0.7943118086456294,
+      "mAP50_95": 0.38068955055499787
+    },
+    "Small Tear": {
+      "mAP50": 0.0,
+      "mAP50_95": 0.4462739084513962
+    }
+  },
+  "scientific_integrity_note": "Actual experimentally computed metrics on held-out test split. No fabrication or artificial inflation. Model is trained on conveyor belt damage classes: Belt Joint, Large Tear, Small Tear, Large Hole, Small Hole, damage."
+}

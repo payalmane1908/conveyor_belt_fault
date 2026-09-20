@@ -1,0 +1,56 @@
+{
+  "manifest_version": "1.0.0",
+  "project": "Industrial Conveyor Belt Joint Rupture & Damage Monitoring System",
+  "policy": "INDUSTRIAL DATA, TESTING & ML TRAINING POLICY",
+  "data_categories": {
+    "RESEARCH": {
+      "description": "Externally sourced peer-reviewed or empirical laboratory experimental datasets.",
+      "status": "INGESTED_AND_CLEANED",
+      "datasets": [
+        {
+          "name": "mendeley_belt_drive",
+          "doi": "10.17632/jf8v2ndydr.1",
+          "runs_count": 459,
+          "provenance_path": "data/metadata/mendeley_belt_drive_provenance.json",
+          "processed_features_path": "data/processed/research/mendeley_belt_drive/cleaned_belt_drive_features.csv",
+          "cleaning_report_path": "data/processed/research/mendeley_belt_drive/data_cleaning_report.json"
+        },
+        {
+          "name": "conveyor_belt_damage_vision",
+          "type": "COMPUTER_VISION_OBJECT_DETECTION",
+          "format": "COCO JSON",
+          "total_images": 651,
+          "total_annotations": 1708,
+          "classes": ["damage", "Belt Joint", "Large Hole", "Large Tear", "Small Hole", "Small Tear"],
+          "provenance_path": "data/metadata/conveyor_belt_damage_vision_provenance.json",
+          "analysis_report_path": "data/processed/research/conveyor_belt_damage_vision/vision_dataset_analysis.json"
+        }
+      ]
+    },
+    "SIMULATION": {
+      "description": "Synthetic telemetry and fault signals generated for DSP pipeline, HMI, and software validation.",
+      "status": "QUARANTINED_AND_CLEANED",
+      "datasets": [
+        {
+          "name": "conveyor_fault_simulation",
+          "rows_count": 12000,
+          "fault_classes_count": 8,
+          "provenance_path": "data/metadata/conveyor_fault_synthetic_provenance.json",
+          "processed_features_path": "data/processed/synthetic/conveyor_fault_simulation/cleaned_synthetic_features.csv"
+        }
+      ]
+    },
+    "FIELD_HARDWARE": {
+      "description": "Real sensor telemetry collected from ESP32 DAQ on physical conveyor machinery.",
+      "status": "AWAITING_PHYSICAL_HARDWARE",
+      "storage_path": "data/raw/field/",
+      "provenance_rule": "Must be flagged with data_source = 'field' or 'hardware'. Never mixed with synthetic data."
+    },
+    "SOFTWARE_TEST": {
+      "description": "Unit and integration test fixtures, deterministic signals, and mock payloads.",
+      "status": "ACTIVE_IN_TEST_SUITE",
+      "location": "backend/tests/",
+      "provenance_rule": "Strictly scoped to unit testing, never used for training or scientific claims."
+    }
+  }
+}

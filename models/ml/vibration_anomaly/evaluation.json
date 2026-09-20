@@ -1,0 +1,258 @@
+{
+  "evaluation_split": "frozen_held_out_research_split",
+  "total_evaluation_runs": 357,
+  "evaluation_composition": {
+    "NORMAL_unseen": 51,
+    "FAULTY_BELT": 153,
+    "UNBALANCED": 153
+  },
+  "overall_metrics": {
+    "roc_auc": 0.6995386389850058,
+    "pr_auc": 0.9263209493375224,
+    "precision": 0.9153439153439153,
+    "recall": 0.565359477124183,
+    "f1_score": 0.6989898989898989,
+    "specificity": 0.6862745098039216,
+    "false_positive_rate": 0.3137254901960784,
+    "confusion_matrix": {
+      "true_negatives": 35,
+      "false_positives": 16,
+      "false_negatives": 133,
+      "true_positives": 173
+    }
+  },
+  "baseline_comparison": {
+    "statistical_euclidean_distance_roc_auc": 0.6415481225169806,
+    "statistical_euclidean_distance_pr_auc": 0.9185416859377196,
+    "isolation_forest_advantage_roc_auc": 0.05799051646802522
+  },
+  "per_condition_metrics": {
+    "FAULTY_BELT": {
+      "total_runs": 153,
+      "anomalies_flagged": 99,
+      "detection_rate": 0.6470588235294118,
+      "mean_anomaly_score": 0.5400571219164642,
+      "status": "RECALL_TRUE_POSITIVE_RATE"
+    },
+    "NORMAL": {
+      "total_runs": 51,
+      "anomalies_flagged": 16,
+      "detection_rate": 0.3137254901960784,
+      "mean_anomaly_score": 0.4886718406942816,
+      "status": "FALSE_POSITIVE_RATE"
+    },
+    "UNBALANCED": {
+      "total_runs": 153,
+      "anomalies_flagged": 74,
+      "detection_rate": 0.48366013071895425,
+      "mean_anomaly_score": 0.50797677946914,
+      "status": "RECALL_TRUE_POSITIVE_RATE"
+    }
+  },
+  "per_rpm_breakdown": {
+    "400": {
+      "total_runs": 21,
+      "normal_runs": 3,
+      "fault_runs": 18,
+      "true_positives": 14,
+      "false_positives": 3,
+      "recall": 0.7777777777777778,
+      "false_positive_rate": 1.0,
+      "mean_anomaly_score": 0.5536386068048824
+    },
+    "500": {
+      "total_runs": 21,
+      "normal_runs": 3,
+      "fault_runs": 18,
+      "true_positives": 11,
+      "false_positives": 2,
+      "recall": 0.6111111111111112,
+      "false_positive_rate": 0.6666666666666666,
+      "mean_anomaly_score": 0.5396591248815183
+    },
+    "600": {
+      "total_runs": 21,
+      "normal_runs": 3,
+      "fault_runs": 18,
+      "true_positives": 11,
+      "false_positives": 1,
+      "recall": 0.6111111111111112,
+      "false_positive_rate": 0.3333333333333333,
+      "mean_anomaly_score": 0.51710117327219
+    },
+    "700": {
+      "total_runs": 21,
+      "normal_runs": 3,
+      "fault_runs": 18,
+      "true_positives": 11,
+      "false_positives": 1,
+      "recall": 0.6111111111111112,
+      "false_positive_rate": 0.3333333333333333,
+      "mean_anomaly_score": 0.5369639221045905
+    },
+    "800": {
+      "total_runs": 21,
+      "normal_runs": 3,
+      "fault_runs": 18,
+      "true_positives": 7,
+      "false_positives": 0,
+      "recall": 0.3888888888888889,
+      "false_positive_rate": 0.0,
+      "mean_anomaly_score": 0.5031470443916664
+    },
+    "900": {
+      "total_runs": 21,
+      "normal_runs": 3,
+      "fault_runs": 18,
+      "true_positives": 11,
+      "false_positives": 0,
+      "recall": 0.6111111111111112,
+      "false_positive_rate": 0.0,
+      "mean_anomaly_score": 0.5341244523376323
+    },
+    "1000": {
+      "total_runs": 21,
+      "normal_runs": 3,
+      "fault_runs": 18,
+      "true_positives": 3,
+      "false_positives": 0,
+      "recall": 0.16666666666666666,
+      "false_positive_rate": 0.0,
+      "mean_anomaly_score": 0.49081918414397274
+    },
+    "1100": {
+      "total_runs": 21,
+      "normal_runs": 3,
+      "fault_runs": 18,
+      "true_positives": 15,
+      "false_positives": 0,
+      "recall": 0.8333333333333334,
+      "false_positive_rate": 0.0,
+      "mean_anomaly_score": 0.5322392909089046
+    },
+    "1200": {
+      "total_runs": 21,
+      "normal_runs": 3,
+      "fault_runs": 18,
+      "true_positives": 6,
+      "false_positives": 0,
+      "recall": 0.3333333333333333,
+      "false_positive_rate": 0.0,
+      "mean_anomaly_score": 0.5141928615821799
+    },
+    "1300": {
+      "total_runs": 21,
+      "normal_runs": 3,
+      "fault_runs": 18,
+      "true_positives": 4,
+      "false_positives": 0,
+      "recall": 0.2222222222222222,
+      "false_positive_rate": 0.0,
+      "mean_anomaly_score": 0.49258047854119286
+    },
+    "1400": {
+      "total_runs": 21,
+      "normal_runs": 3,
+      "fault_runs": 18,
+      "true_positives": 4,
+      "false_positives": 1,
+      "recall": 0.2222222222222222,
+      "false_positive_rate": 0.3333333333333333,
+      "mean_anomaly_score": 0.4894672866090247
+    },
+    "1500": {
+      "total_runs": 21,
+      "normal_runs": 3,
+      "fault_runs": 18,
+      "true_positives": 4,
+      "false_positives": 0,
+      "recall": 0.2222222222222222,
+      "false_positive_rate": 0.0,
+      "mean_anomaly_score": 0.4858302154802172
+    },
+    "1600": {
+      "total_runs": 21,
+      "normal_runs": 3,
+      "fault_runs": 18,
+      "true_positives": 14,
+      "false_positives": 1,
+      "recall": 0.7777777777777778,
+      "false_positive_rate": 0.3333333333333333,
+      "mean_anomaly_score": 0.519603893558038
+    },
+    "1700": {
+      "total_runs": 21,
+      "normal_runs": 3,
+      "fault_runs": 18,
+      "true_positives": 11,
+      "false_positives": 0,
+      "recall": 0.6111111111111112,
+      "false_positive_rate": 0.0,
+      "mean_anomaly_score": 0.5008424057803893
+    },
+    "1800": {
+      "total_runs": 21,
+      "normal_runs": 3,
+      "fault_runs": 18,
+      "true_positives": 14,
+      "false_positives": 2,
+      "recall": 0.7777777777777778,
+      "false_positive_rate": 0.6666666666666666,
+      "mean_anomaly_score": 0.5228052042142344
+    },
+    "1900": {
+      "total_runs": 21,
+      "normal_runs": 3,
+      "fault_runs": 18,
+      "true_positives": 15,
+      "false_positives": 3,
+      "recall": 0.8333333333333334,
+      "false_positive_rate": 1.0,
+      "mean_anomaly_score": 0.5549590419690885
+    },
+    "2000": {
+      "total_runs": 21,
+      "normal_runs": 3,
+      "fault_runs": 18,
+      "true_positives": 18,
+      "false_positives": 2,
+      "recall": 1.0,
+      "false_positive_rate": 0.6666666666666666,
+      "mean_anomaly_score": 0.5344758509157904
+    }
+  },
+  "per_pretension_breakdown": {
+    "70N": {
+      "total_runs": 119,
+      "normal_runs": 17,
+      "fault_runs": 102,
+      "true_positives": 70,
+      "false_positives": 6,
+      "recall": 0.6862745098039216,
+      "false_positive_rate": 0.35294117647058826,
+      "mean_anomaly_score": 0.5261917885453886
+    },
+    "110N": {
+      "total_runs": 119,
+      "normal_runs": 17,
+      "fault_runs": 102,
+      "true_positives": 49,
+      "false_positives": 4,
+      "recall": 0.4803921568627451,
+      "false_positive_rate": 0.23529411764705882,
+      "mean_anomaly_score": 0.5213514606087353
+    },
+    "150N": {
+      "total_runs": 119,
+      "normal_runs": 17,
+      "fault_runs": 102,
+      "true_positives": 54,
+      "false_positives": 6,
+      "recall": 0.5294117647058824,
+      "false_positive_rate": 0.35294117647058826,
+      "mean_anomaly_score": 0.5093596986392019
+    }
+  },
+  "threshold_methodology": "Default IsolationForest boundary (decision_function < 0.0)",
+  "scientific_integrity_note": "Real computed evaluation metrics on held-out research runs. Zero synthetic data contamination."
+}

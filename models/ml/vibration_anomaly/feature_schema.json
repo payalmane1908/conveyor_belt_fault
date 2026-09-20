@@ -1,0 +1,89 @@
+{
+  "feature_count": 10,
+  "features": [
+    "speed_rpm",
+    "pretension_n",
+    "driver_rms",
+    "driver_peak",
+    "driver_crest_factor",
+    "driver_kurtosis",
+    "driver_dominant_freq_hz",
+    "driven_rms",
+    "driven_crest_factor",
+    "driven_dominant_freq_hz"
+  ],
+  "feature_units": {
+    "speed_rpm": "RPM",
+    "pretension_n": "N",
+    "driver_rms": "g",
+    "driver_peak": "g",
+    "driver_crest_factor": "ratio",
+    "driver_kurtosis": "dimensionless",
+    "driver_dominant_freq_hz": "Hz",
+    "driven_rms": "g",
+    "driven_crest_factor": "ratio",
+    "driven_dominant_freq_hz": "Hz"
+  },
+  "operating_conditions": [
+    "speed_rpm",
+    "pretension_n"
+  ],
+  "vibration_metrics": [
+    "driver_rms",
+    "driver_peak",
+    "driver_crest_factor",
+    "driver_kurtosis",
+    "driver_dominant_freq_hz",
+    "driven_rms",
+    "driven_crest_factor",
+    "driven_dominant_freq_hz"
+  ],
+  "training_normal_medians": {
+    "speed_rpm": 1200.0,
+    "pretension_n": 110.0,
+    "driver_rms": 0.18429700849560848,
+    "driver_peak": 1.007065373242526,
+    "driver_crest_factor": 5.209393331483081,
+    "driver_kurtosis": 0.7020205004228208,
+    "driver_dominant_freq_hz": 298.3,
+    "driven_rms": 0.1935120383127688,
+    "driven_crest_factor": 7.776191377717458,
+    "driven_dominant_freq_hz": 266.4
+  },
+  "training_normal_iqrs": {
+    "speed_rpm": 800.0,
+    "pretension_n": 80.0,
+    "driver_rms": 0.220293247767253,
+    "driver_peak": 0.9960029051722481,
+    "driver_crest_factor": 1.0872437492858857,
+    "driver_kurtosis": 0.5211990506402617,
+    "driver_dominant_freq_hz": 94.35000000000005,
+    "driven_rms": 0.3181214093069352,
+    "driven_crest_factor": 3.5450908547927877,
+    "driven_dominant_freq_hz": 135.10000000000002
+  },
+  "scaler_center": [
+    1200.0,
+    110.0,
+    0.18429700849560848,
+    1.007065373242526,
+    5.209393331483081,
+    0.7020205004228208,
+    298.3,
+    0.1935120383127688,
+    7.776191377717458,
+    266.4
+  ],
+  "scaler_scale": [
+    800.0,
+    80.0,
+    0.220293247767253,
+    0.9960029051722481,
+    1.0872437492858857,
+    0.5211990506402617,
+    94.35000000000005,
+    0.3181214093069352,
+    3.5450908547927877,
+    135.10000000000002
+  ]
+}

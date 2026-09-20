@@ -1,0 +1,105 @@
+{
+  "dataset_name": "conveyor_belt_damage_vision",
+  "description": "Conveyor Belt Damage Detection Dataset (COCO format)",
+  "source": "Roboflow Universe (https://universe.roboflow.com/test-yfiry/conveyor-belt-damage-ucjlj)",
+  "license": "CC BY 4.0",
+  "scientific_disclaimer": "The dataset contains categories: Belt Joint, Large Tear, Small Tear, Large Hole, Small Hole, damage. It does NOT contain an explicit class called 'Crack'.",
+  "summary": {
+    "total_images": 651,
+    "total_annotations": 1708,
+    "categories_count": 6,
+    "categories": {
+      "0": "damage",
+      "1": "Belt Joint",
+      "2": "Large Hole",
+      "3": "Large Tear",
+      "4": "Small Hole",
+      "5": "Small Tear"
+    }
+  },
+  "splits": {
+    "train": {
+      "image_count": 489,
+      "annotation_count": 1245,
+      "images_with_annotations": 489,
+      "images_without_annotations": 0,
+      "missing_image_files": 0,
+      "class_distribution": {
+        "Large Hole": 300,
+        "Small Tear": 291,
+        "Large Tear": 255,
+        "Small Hole": 339,
+        "Belt Joint": 60
+      },
+      "image_resolution_sample": [
+        512,
+        512
+      ],
+      "bbox_stats": {
+        "mean_width_px": 114.80722891566265,
+        "mean_height_px": 52.03253012048193,
+        "median_area_px": 2112.0
+      }
+    },
+    "valid": {
+      "image_count": 97,
+      "annotation_count": 271,
+      "images_with_annotations": 97,
+      "images_without_annotations": 0,
+      "missing_image_files": 0,
+      "class_distribution": {
+        "Small Tear": 71,
+        "Large Tear": 60,
+        "Large Hole": 62,
+        "Small Hole": 64,
+        "Belt Joint": 14
+      },
+      "image_resolution_sample": [
+        512,
+        512
+      ],
+      "bbox_stats": {
+        "mean_width_px": 119.04612546125462,
+        "mean_height_px": 52.90774907749078,
+        "median_area_px": 2171.0
+      }
+    },
+    "test": {
+      "image_count": 65,
+      "annotation_count": 192,
+      "images_with_annotations": 65,
+      "images_without_annotations": 0,
+      "missing_image_files": 0,
+      "class_distribution": {
+        "Large Tear": 43,
+        "Small Tear": 44,
+        "Small Hole": 55,
+        "Large Hole": 43,
+        "Belt Joint": 7
+      },
+      "image_resolution_sample": [
+        512,
+        512
+      ],
+      "bbox_stats": {
+        "mean_width_px": 121.59895833333333,
+        "mean_height_px": 45.442708333333336,
+        "median_area_px": 2194.125
+      }
+    }
+  },
+  "global_class_distribution": {
+    "Large Hole": 405,
+    "Small Tear": 406,
+    "Large Tear": 358,
+    "Small Hole": 458,
+    "Belt Joint": 81
+  },
+  "integrity_checks": {
+    "duplicate_image_ids": 0,
+    "missing_image_files": 0,
+    "invalid_bounding_boxes": 0,
+    "zero_area_boxes": 0,
+    "out_of_bound_boxes": 0
+  }
+}

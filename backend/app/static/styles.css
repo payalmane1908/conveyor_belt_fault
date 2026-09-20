@@ -1,0 +1,677 @@
+/* ==========================================================================
+   CONVEYOR BELT SCADA HMI STYLESHEET
+   Industrial HMI design following ISA-101-inspired principles
+   ========================================================================== */
+
+:root {
+  --bg-base: #070a12;
+  --bg-surface: #0d1522;
+  --bg-surface-elevated: #131e30;
+  --border-color: #1e2e45;
+  --border-focus: #38bdf8;
+  
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  /* Functional Signal Colors (ISA-101 High Contrast) */
+  --signal-live: #00e676;
+  --signal-amber: #ffb300;
+  --signal-danger: #ff1744;
+  --signal-cyan: #00e5ff;
+  --signal-neutral: #475569;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "Consolas", "Courier New", monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   Header Bar
+   -------------------------------------------------------------------------- */
+.scada-header {
+  background-color: var(--bg-surface);
+  border-bottom: 2px solid var(--border-color);
+  padding: 12px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.system-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.unit-code {
+  background-color: #1e293b;
+  color: var(--signal-cyan);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #334155;
+  letter-spacing: 0.5px;
+}
+
+.system-title h1 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.design-principle-tag {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.status-indicator-box {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.status-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.value-mono {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border: 1px solid transparent;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.badge-connected {
+  background-color: rgba(0, 230, 118, 0.12);
+  color: var(--signal-live);
+  border-color: rgba(0, 230, 118, 0.3);
+}
+.badge-connected .dot { background-color: var(--signal-live); }
+
+.badge-reconnecting {
+  background-color: rgba(255, 179, 0, 0.12);
+  color: var(--signal-amber);
+  border-color: rgba(255, 179, 0, 0.3);
+}
+.badge-reconnecting .dot { background-color: var(--signal-amber); }
+
+.badge-disconnected {
+  background-color: rgba(255, 23, 68, 0.12);
+  color: var(--signal-danger);
+  border-color: rgba(255, 23, 68, 0.3);
+}
+.badge-disconnected .dot { background-color: var(--signal-danger); }
+
+.badge-live {
+  background-color: rgba(0, 230, 118, 0.18);
+  color: var(--signal-live);
+  border-color: var(--signal-live);
+}
+.badge-live .dot { background-color: var(--signal-live); }
+
+.badge-sim {
+  background-color: rgba(255, 179, 0, 0.18);
+  color: var(--signal-amber);
+  border-color: var(--signal-amber);
+}
+.badge-sim .dot { background-color: var(--signal-amber); }
+
+.badge-neutral {
+  background-color: #1e293b;
+  color: #94a3b8;
+  border-color: #334155;
+}
+.badge-neutral .dot { background-color: #64748b; }
+
+.badge-info {
+  background-color: rgba(0, 229, 255, 0.12);
+  color: var(--signal-cyan);
+  border-color: rgba(0, 229, 255, 0.3);
+}
+
+.badge-amber {
+  background-color: rgba(255, 179, 0, 0.15);
+  color: var(--signal-amber);
+  border-color: rgba(255, 179, 0, 0.4);
+  font-size: 0.7rem;
+  padding: 2px 6px;
+}
+
+/* --------------------------------------------------------------------------
+   Container & Cards Layout
+   -------------------------------------------------------------------------- */
+.scada-container {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 16px;
+}
+
+/* --------------------------------------------------------------------------
+   Telemetry Parameter Tiles Grid
+   -------------------------------------------------------------------------- */
+.telemetry-tiles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.param-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 120px;
+}
+
+.param-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #1e293b;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+
+.param-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+}
+
+.param-sensor {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.param-value-container {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.param-value {
+  font-family: var(--font-mono);
+  font-size: 2.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.param-unit {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.card-footer {
+  display: flex;
+  align-items: center;
+}
+
+.status-pill {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+
+.pill-unavailable {
+  background-color: #1e293b;
+  color: var(--text-muted);
+  border: 1px solid #334155;
+}
+
+.pill-active {
+  background-color: rgba(0, 230, 118, 0.15);
+  color: var(--signal-live);
+  border: 1px solid rgba(0, 230, 118, 0.3);
+}
+
+/* --------------------------------------------------------------------------
+   Oscilloscope Panel
+   -------------------------------------------------------------------------- */
+.oscilloscope-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.oscilloscope-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 12px;
+}
+
+.os-title-block h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.os-specs {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.spec-tag {
+  background-color: var(--bg-surface-elevated);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  padding: 2px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--border-color);
+}
+
+.spec-tag strong {
+  color: var(--signal-cyan);
+  font-family: var(--font-mono);
+}
+
+.os-metadata-block {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.meta-item .lbl {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.val-mono {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.provenance-tag {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.prov-live {
+  background-color: rgba(0, 230, 118, 0.15);
+  color: var(--signal-live);
+  border: 1px solid var(--signal-live);
+}
+
+.prov-sim {
+  background-color: rgba(255, 179, 0, 0.15);
+  color: var(--signal-amber);
+  border: 1px solid var(--signal-amber);
+}
+
+.prov-none {
+  background-color: #1e293b;
+  color: var(--text-muted);
+}
+
+/* Canvas Area */
+.canvas-wrapper {
+  position: relative;
+  width: 100%;
+  background-color: #03060c;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+  height: 320px;
+}
+
+#oscilloscope-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.canvas-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(3, 6, 12, 0.85);
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.overlay-icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+  opacity: 0.6;
+}
+
+.overlay-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: 1px;
+}
+
+.overlay-subtitle {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.canvas-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Oscilloscope Footer */
+.oscilloscope-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #1e293b;
+}
+
+.hash-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hash-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.hash-code {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  background-color: #030712;
+  color: var(--signal-cyan);
+  padding: 3px 8px;
+  border-radius: 3px;
+  border: 1px solid #1e293b;
+  max-width: 480px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge-crypto {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+
+.badge-crypto-verified {
+  background-color: rgba(0, 230, 118, 0.15);
+  color: var(--signal-live);
+  border: 1px solid var(--signal-live);
+}
+
+.badge-crypto-mismatch {
+  background-color: rgba(255, 23, 68, 0.15);
+  color: var(--signal-danger);
+  border: 1px solid var(--signal-danger);
+}
+
+.badge-crypto-pending {
+  background-color: #1e293b;
+  color: var(--text-muted);
+  border: 1px solid #334155;
+}
+
+.timing-section {
+  display: flex;
+  gap: 16px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.timing-section strong {
+  color: var(--text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Bottom Grid: Diagnostics & Simulation Harness
+   -------------------------------------------------------------------------- */
+.bottom-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 992px) {
+  .bottom-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.table-scroll {
+  overflow-x: auto;
+  margin-top: 10px;
+}
+
+.scada-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.scada-table th {
+  text-align: left;
+  padding: 8px 10px;
+  background-color: var(--bg-surface-elevated);
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 700;
+  font-size: 0.68rem;
+}
+
+.scada-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #162235;
+  color: var(--text-secondary);
+}
+
+.scada-table tr:hover {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.empty-row td {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 24px;
+}
+
+/* Development Test Harness Card */
+.dev-test-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dev-explanation {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.dev-explanation code {
+  font-family: var(--font-mono);
+  color: var(--signal-cyan);
+  font-size: 0.7rem;
+  display: block;
+  margin: 6px 0;
+  background-color: #030712;
+  padding: 4px 6px;
+  border-radius: 3px;
+  border: 1px solid #1e293b;
+}
+
+.dev-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.control-group label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.control-group select,
+.control-group input {
+  background-color: #030712;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding: 6px 10px;
+  border-radius: 4px;
+  outline: none;
+}
+
+.control-group select:focus,
+.control-group input:focus {
+  border-color: var(--border-focus);
+}
+
+.control-group .hint {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.btn-simulation {
+  background-color: rgba(255, 179, 0, 0.15);
+  color: var(--signal-amber);
+  border: 1px solid var(--signal-amber);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.8rem;
+  padding: 10px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 0.5px;
+}
+
+.btn-simulation:hover {
+  background-color: rgba(255, 179, 0, 0.25);
+}
+
+.btn-simulation:active {
+  transform: translateY(1px);
+}
+
+.sim-feedback {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  min-height: 16px;
+}

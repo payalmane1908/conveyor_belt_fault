@@ -1,0 +1,71 @@
+{
+  "provenance_version": "1.0.0",
+  "dataset_identity": {
+    "dataset_name": "conveyor_belt_damage_vision",
+    "title": "Conveyor Belt Damage Detection Dataset (COCO format)",
+    "source_type": "RESEARCH",
+    "source_url": "https://universe.roboflow.com/test-yfiry/conveyor-belt-damage-ucjlj",
+    "license": "CC BY 4.0 (Creative Commons Attribution 4.0 International)",
+    "ingestion_date": "2026-09-20",
+    "annotation_format": "COCO JSON (Bounding Boxes: [x, y, width, height])",
+    "original_archive": "dataset/Conveyor Belt Damage.v1i.coco.zip"
+  },
+  "scientific_domain_limitations": {
+    "crack_class_present": false,
+    "disclaimer": "CRITICAL SCIENTIFIC CORRECTION: The dataset contains exactly 6 annotated damage categories: Belt Joint, Large Tear, Small Tear, Large Hole, Small Hole, and general damage. It does NOT explicitly contain a class called 'Crack'. The system must NOT claim detection of cracks unless an actual crack-labeled dataset or fine-tuned model is added in a subsequent revision.",
+    "authorized_uses": [
+      "Conveyor belt surface tear detection (Large Tear, Small Tear)",
+      "Conveyor belt perforation/puncture detection (Large Hole, Small Hole)",
+      "Conveyor belt joint/splice optical boundary identification (Belt Joint)",
+      "General surface damage region proposal (damage)",
+      "Benchmarking object detection algorithms on industrial rubber conveyor belts",
+      "Multi-evidence joint health passport demonstration"
+    ],
+    "prohibited_claims": [
+      "Claiming the model detects microscopic cracks without a crack-specific labeled dataset",
+      "Renaming the 'damage' or 'tear' classes to 'crack' without scientific annotation basis",
+      "Claiming field-certified safety compliance based solely on laboratory/benchmark imagery"
+    ]
+  },
+  "split_specifications": {
+    "total_images": 651,
+    "total_annotations": 1708,
+    "image_resolution": "512x512 pixels (RGB)",
+    "splits": {
+      "train": {
+        "images": 489,
+        "annotations": 1245
+      },
+      "valid": {
+        "images": 97,
+        "annotations": 271
+      },
+      "test": {
+        "images": 65,
+        "annotations": 192,
+        "role": "Strictly held-out evaluation set. Never used in training or hyperparameter tuning."
+      }
+    }
+  },
+  "annotated_classes": {
+    "0": "damage",
+    "1": "Belt Joint",
+    "2": "Large Hole",
+    "3": "Large Tear",
+    "4": "Small Hole",
+    "5": "Small Tear"
+  },
+  "class_distribution": {
+    "Large Hole": 405,
+    "Small Tear": 406,
+    "Large Tear": 358,
+    "Small Hole": 458,
+    "Belt Joint": 81
+  },
+  "storage_locations": {
+    "raw_root": "data/raw/research/conveyor_belt_damage_vision/",
+    "analysis_report": "data/processed/research/conveyor_belt_damage_vision/vision_dataset_analysis.json",
+    "validation_markdown": "data/processed/research/conveyor_belt_damage_vision/dataset_validation_report.md",
+    "ground_truth_visualizations": "data/processed/research/conveyor_belt_damage_vision/sample_ground_truth/"
+  }
+}
