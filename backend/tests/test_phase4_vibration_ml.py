@@ -313,6 +313,10 @@ class TestPhase4BVibrationMLIntegration(unittest.TestCase):
             self.db.add(joint)
             self.db.commit()
 
+        # Ensure no lingering vision observations from other tests interfere with this ML-isolation test
+        self.db.query(models.VisionObservation).filter(
+            (models.VisionObservation.joint_id == "joint-001") | (models.VisionObservation.joint_code == "J-01")
+        ).delete()
         # Joint has NORMAL risk in Phase 3
         joint.current_risk = "NORMAL"
         self.db.commit()

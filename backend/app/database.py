@@ -1,6 +1,7 @@
 import sqlite3
 import logging
 from typing import Generator
+from contextlib import contextmanager
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from .config import settings
@@ -34,6 +35,15 @@ Base = declarative_base()
 
 def get_db() -> Generator[Session, None, None]:
     """Dependency that yields a database session and safely closes it."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@contextmanager
+def get_db_context() -> Generator[Session, None, None]:
+    """Context manager that yields a database session and safely closes it."""
     db = SessionLocal()
     try:
         yield db

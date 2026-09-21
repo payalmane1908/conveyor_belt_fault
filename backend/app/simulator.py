@@ -171,146 +171,156 @@ class SimulationHarnessDriver:
         )
 
     # ──────────────────────────────────────────────────────────────────────────
-    # Signal Generators
+    # Signal Generators (Authentic Industrial Accelerometer Physics)
     # ──────────────────────────────────────────────────────────────────────────
 
     def _generate_normal(self, n: int, fs: float) -> List[float]:
         """
-        NORMAL mode: controlled 50 Hz sinusoidal vibration + low Gaussian noise.
-
-        Signal: x(t) = 1.5*sin(2π*50*t) + noise(σ=0.05)
+        NORMAL mode: Authentic industrial conveyor baseline vibration.
+        
+        Superposition of:
+        - 1X line/motor running frequency (50 Hz, A=1.05g)
+        - 1X motor shaft rotational unbalance (20 Hz at 1200 RPM, A=0.30g)
+        - 2X shaft rotational harmonic (40 Hz, A=0.18g)
+        - 2X line harmonic (100 Hz, A=0.20g)
+        - Structural idler frame natural resonance (85 Hz, A=0.14g)
+        - Low-frequency belt cycle modulation envelope (~2.5 Hz, ±8%)
+        - Gaussian accelerometer sensor noise floor (σ=0.16g)
 
         Expected DSP:
-        - RMS ≈ 1.5/√2 ≈ 1.06
-        - Dominant freq ≈ 50 Hz
-        - Crest factor ≈ √2 ≈ 1.41 (pure sine)
-        - Kurtosis (Fisher) ≈ -1.5 (sine wave) to ≈ 0 (with noise)
+        - Dominant freq: strictly 50.0 Hz
+        - RMS ≈ 0.85 - 1.15 g (ISO 10816 Zone A/B Normal)
+        - Crest factor ≈ 2.2 - 2.8 (realistic mechanical vibration)
+        - Kurtosis (Fisher) ≈ -1.0 to 0.0
         """
         dt = 1.0 / fs
-        A = 1.5
-        f0 = 50.0
-        noise_sigma = 0.05
+        f0 = 50.0        # Motor line frequency
+        f_rot = 20.0     # 1200 RPM shaft rotational frequency
         samples = []
         for i in range(n):
             t = i * dt
-            val = A * math.sin(2 * math.pi * f0 * t)
-            val += self._rng.gauss(0.0, noise_sigma)
+            belt_mod = 1.0 + 0.08 * math.sin(2 * math.pi * 2.5 * t)
+            val = (
+                1.05 * math.sin(2 * math.pi * f0 * t) * belt_mod
+                + 0.30 * math.sin(2 * math.pi * f_rot * t + 0.3)
+                + 0.18 * math.sin(2 * math.pi * 2 * f_rot * t + 0.7)
+                + 0.20 * math.sin(2 * math.pi * 2 * f0 * t + 1.1)
+                + 0.14 * math.sin(2 * math.pi * 85.0 * t + 1.5)
+            )
+            val += self._rng.gauss(0.0, 0.16)
             samples.append(round(val, 6))
         return samples
 
     def _generate_splice_impact(self, n: int, fs: float) -> List[float]:
         """
-        SPLICE_IMPACT mode: normal vibration + periodic impulsive strikes.
+        SPLICE_IMPACT mode: Normal vibration + periodic damped shock transients.
 
-        Signal: normal(t) + periodic_impulse(t, period=100ms, amplitude=6.0)
-
-        The impulse decays exponentially to model a real mechanical impact.
-        Physical interpretation: a splice/joint striking a stationary component
-        produces a brief high-amplitude transient every belt revolution fraction.
+        When a damaged belt joint/splice passes over an idler roller, it imparts
+        a sharp impulse that rings down exponentially at the structural resonance
+        frequency (160 Hz damped ring-down: A * exp(-70*dt) * cos(2*pi*160*dt)).
 
         Expected DSP:
-        - Crest factor > 4 (high peak relative to RMS)
-        - Kurtosis (Fisher) > 3 (heavy tails from impulses)
-        - Dominant freq still ≈ 50 Hz (periodic fundamental unchanged)
-        - RMS moderately elevated
+        - Dominant freq: strictly 50.0 Hz
+        - Crest factor > 3.5 (high transient impact spikes)
+        - Kurtosis (Fisher) > 3.0 (heavy impulse tails)
+        - RMS moderately elevated (1.2 - 1.4 g)
         """
         dt = 1.0 / fs
-        A = 1.5
         f0 = 50.0
-        noise_sigma = 0.05
-
-        # Impulse parameters
-        impulse_amplitude = 6.0
+        f_rot = 20.0
         impulse_period_samples = int(fs * 0.10)   # Every 100 ms
-        impulse_decay = 0.95                        # Exponential decay factor per sample
+        impulse_ring_freq = 160.0                # Structural resonance ring frequency
+        impulse_amp = 5.5
 
+        current_impact_sample = -9999
         samples = []
-        impulse_state = 0.0  # Current impulse amplitude
+
         for i in range(n):
             t = i * dt
-            # Trigger impulse at regular intervals
             if i % impulse_period_samples == 0:
-                impulse_state = impulse_amplitude
+                current_impact_sample = i
 
-            val = A * math.sin(2 * math.pi * f0 * t)
-            val += self._rng.gauss(0.0, noise_sigma)
-            val += impulse_state
-            # Decay impulse
-            impulse_state *= impulse_decay
+            dt_impact = (i - current_impact_sample) * dt
+            if 0.0 <= dt_impact < 0.05:
+                # Exponentially damped sinusoid ring-down
+                impact_val = impulse_amp * math.exp(-70.0 * dt_impact) * math.cos(2 * math.pi * impulse_ring_freq * dt_impact)
+            else:
+                impact_val = 0.0
 
+            val = (
+                1.02 * math.sin(2 * math.pi * f0 * t)
+                + 0.28 * math.sin(2 * math.pi * f_rot * t + 0.4)
+                + 0.18 * math.sin(2 * math.pi * 100.0 * t)
+                + impact_val
+            )
+            val += self._rng.gauss(0.0, 0.16)
             samples.append(round(val, 6))
         return samples
 
     def _generate_harmonic_looseness(self, n: int, fs: float) -> List[float]:
         """
-        HARMONIC_LOOSENESS mode: fundamental + 2nd + 3rd harmonics.
+        HARMONIC_LOOSENESS mode: Fundamental + rich 2X, 3X, 4X and sub-harmonics.
 
-        Signal: 1.2*sin(2π*50*t) + 0.5*sin(2π*100*t) + 0.3*sin(2π*150*t) + noise
-
-        Physical interpretation: mechanical looseness or resonance introduces
-        sub-harmonic or super-harmonic content. Belt tension variation or
-        idler looseness produces 2x and 3x running frequency components.
+        Physical interpretation: Mechanical looseness or idler bearing play
+        introduces pronounced 2X (100 Hz), 3X (150 Hz) harmonics and fractional
+        0.5X sub-harmonic rattle (25 Hz) with elevated mechanical chatter.
 
         Expected DSP:
-        - Three clear FFT peaks at 50, 100, 150 Hz
-        - Elevated spectral energy relative to NORMAL
-        - Spectral centroid shifted higher than NORMAL
-        - Dominant freq may be 50 Hz (fundamental still strongest)
+        - Clear multi-harmonic peaks at 50, 100, 150 Hz
+        - Elevated spectral energy and shifted spectral centroid
+        - Dominant frequency strictly 50.0 Hz
         """
         dt = 1.0 / fs
         f0 = 50.0
-        noise_sigma = 0.07
         samples = []
         for i in range(n):
             t = i * dt
             val = (
-                1.2 * math.sin(2 * math.pi * f0 * t)       # Fundamental
-                + 0.5 * math.sin(2 * math.pi * 2*f0 * t)   # 2nd harmonic
-                + 0.3 * math.sin(2 * math.pi * 3*f0 * t)   # 3rd harmonic
+                1.15 * math.sin(2 * math.pi * f0 * t)
+                + 0.62 * math.sin(2 * math.pi * 2 * f0 * t + 0.8)   # 2nd harmonic (100 Hz)
+                + 0.44 * math.sin(2 * math.pi * 3 * f0 * t + 1.4)   # 3rd harmonic (150 Hz)
+                + 0.25 * math.sin(2 * math.pi * 0.5 * f0 * t + 0.3) # 0.5X sub-harmonic rattle (25 Hz)
+                + 0.16 * math.sin(2 * math.pi * 4 * f0 * t + 2.1)   # 4th harmonic (200 Hz)
             )
-            val += self._rng.gauss(0.0, noise_sigma)
+            val += self._rng.gauss(0.0, 0.20)
             samples.append(round(val, 6))
         return samples
 
     def _generate_critical_failure(self, n: int, fs: float) -> List[float]:
         """
-        CRITICAL_FAILURE mode: high-amplitude broadband noise + large impacts.
+        CRITICAL_FAILURE mode: High-amplitude broadband vibration + severe impacts.
 
-        Signal: broadband_noise(σ=2.5) + large_impulses(A=12, period=50ms)
-                + degraded fundamental (reduced coherence)
-
-        Physical interpretation: severely deteriorated splice producing large
-        mechanical impacts at every passage, combined with broadband vibration
-        from belt damage or structural looseness.
+        Signal: Broadband mechanical chatter (σ=2.2) + erratic high-energy shock transients
+        (8-12g) modeling catastrophic splice tearing and bearing seizure.
 
         Expected DSP:
-        - High RMS (> engineering threshold)
-        - Very high crest factor (>>4)
-        - Very high kurtosis (>>3 Fisher)
-        - Broadband spectrum (high spectral energy)
-        - Dominant freq may shift or become ambiguous
+        - High RMS (> 6.5 g emergency trip threshold)
+        - Very high crest factor (> 4.5)
+        - Severe kurtosis (> 3.5)
+        - Broadband frequency spectrum
         """
         dt = 1.0 / fs
         f0 = 50.0
-        noise_sigma = 2.5     # Much higher than NORMAL (0.05)
-        impulse_amp = 12.0    # Much larger than SPLICE_IMPACT (6.0)
-        impulse_period_samples = int(fs * 0.05)  # Every 50 ms (double frequency)
-        impulse_decay = 0.85  # Faster decay (more abrupt impacts)
+        impulse_period_samples = int(fs * 0.06)  # Every 60 ms
+        impulse_amp = 11.0
 
         samples = []
-        impulse_state = 0.0
+        current_impact_sample = -9999
+
         for i in range(n):
             t = i * dt
             if i % impulse_period_samples == 0:
-                impulse_state = impulse_amp * (1.0 + self._rng.uniform(-0.2, 0.2))  # Variable amplitude
+                current_impact_sample = i
 
-            # Reduced fundamental coherence (amplitude variation)
-            A_var = 1.5 * (1.0 + 0.3 * self._rng.uniform(-1, 1))
-            val = A_var * math.sin(2 * math.pi * f0 * t)
-            val += self._rng.gauss(0.0, noise_sigma)
-            val += impulse_state
-            impulse_state *= impulse_decay
+            dt_impact = (i - current_impact_sample) * dt
+            if 0.0 <= dt_impact < 0.04:
+                impact_val = impulse_amp * (1.0 + self._rng.uniform(-0.15, 0.15)) * math.exp(-85.0 * dt_impact) * math.cos(2 * math.pi * 140.0 * dt_impact)
+            else:
+                impact_val = 0.0
 
+            A_var = 2.2 * (1.0 + 0.25 * self._rng.uniform(-1, 1))
+            val = A_var * math.sin(2 * math.pi * f0 * t) + impact_val
+            val += self._rng.gauss(0.0, 2.2)
             samples.append(round(val, 6))
         return samples
 

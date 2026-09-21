@@ -23,10 +23,17 @@ async def lifespan(app: FastAPI):
     ws_manager.set_loop(asyncio.get_running_loop())
     if settings.SERIAL_WORKER_ENABLED:
         serial_worker.start()
+    else:
+        # Auto-start historical replay loop in stable NORMAL condition so SCADA is live and non-fluctuating
+        from app.historical_replay_service import historical_replay_engine
+        historical_replay_engine.start(condition="NORMAL", speed_hz=0.5)
     yield
     # Shutdown: Stop workers cleanly
     if settings.SERIAL_WORKER_ENABLED:
         serial_worker.stop()
+    else:
+        from app.historical_replay_service import historical_replay_engine
+        historical_replay_engine.stop()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -44,19 +51,41 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
 # 1. Register API and WebSocket routes FIRST (prevents static mount interception)
 app.include_router(router)
 app.include_router(ws_router)
 
-# 2. Mount static assets under /static
+# 2. Mount static assets
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
+if (frontend_dist / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=frontend_dist / "assets"), name="frontend_assets")
 
-# 3. Dedicated root route serving the SCADA HMI
-@app.get("/")
-def serve_scada_root():
+# 3. Dedicated route for Classic SCADA HMI
+@app.get("/classic")
+def serve_scada_classic():
     index_file = static_dir / "index.html"
     if index_file.exists():
         return FileResponse(index_file)
+    return {"status": "Classic SCADA not found"}
+
+# 4. Modern React SPA root & path catch-all (with fallback to classic)
+@app.get("/")
+@app.get("/{full_path:path}")
+def serve_spa(full_path: str = ""):
+    if full_path.startswith("api/") or full_path.startswith("ws/") or full_path in ("docs", "redoc", "openapi.json"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Endpoint not found")
+    
+    react_index = frontend_dist / "index.html"
+    if react_index.exists():
+        return FileResponse(react_index)
+
+    index_file = static_dir / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+
     return {
         "system": settings.PROJECT_NAME,
         "phase": "PHASE 3: DSP Feature Extraction, Joint Health Scoring & Anomaly Detection",

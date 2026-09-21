@@ -1,4 +1,5 @@
 import json
+import uuid
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, Query, WebSocket, WebSocketDisconnect, UploadFile, File, Form
@@ -15,6 +16,7 @@ from .websocket_manager import ws_manager
 from .ml_service import vibration_anomaly_engine
 from .serial_worker import serial_worker
 from .joint_lifecycle_service import joint_lifecycle_service
+from .historical_replay_service import historical_replay_engine
 
 router = APIRouter(prefix=settings.API_V1_STR)
 ws_router = APIRouter()
@@ -192,6 +194,13 @@ async def generate_and_ingest_sim_burst(
     Test harness generating a deterministic synthetic burst strictly tagged SIMULATION.
     Sampling rate is 1000 Hz; physical vibration frequency is 50 Hz (well below 500 Hz Nyquist).
     """
+    tracker = db.query(models.StreamTracker).filter(
+        models.StreamTracker.device_id == sim_driver.device_id,
+        models.StreamTracker.stream_id == sim_driver.stream_id
+    ).first()
+    if tracker and sim_driver.sequence_counter <= tracker.last_sequence_number:
+        sim_driver.sequence_counter = tracker.last_sequence_number
+
     packet = sim_driver.generate_test_packet(
         sensor_id=sensor_id,
         joint_id=joint_id,
@@ -260,6 +269,13 @@ async def generate_fault_burst(
             detail=f"Invalid fault_mode. Valid options: {VALID_FAULT_MODES}"
         )
 
+    tracker = db.query(models.StreamTracker).filter(
+        models.StreamTracker.device_id == sim_driver.device_id,
+        models.StreamTracker.stream_id == sim_driver.stream_id
+    ).first()
+    if tracker and sim_driver.sequence_counter <= tracker.last_sequence_number:
+        sim_driver.sequence_counter = tracker.last_sequence_number
+
     packet = sim_driver.generate_fault_packet(
         sensor_id=sensor_id,
         fault_mode=fault_mode,
@@ -288,6 +304,10 @@ async def generate_fault_burst(
         stream_tracker=tracker_dict
     )
     _run_health_pipeline(db, burst)
+    try:
+        historical_replay_engine.set_condition(fault_mode)
+    except Exception:
+        pass
     return schemas.RawTelemetryBurstSummary.model_validate(burst)
 
 # ---------------------------------------------------------
@@ -328,10 +348,12 @@ def get_telemetry_snapshot(db: Session = Depends(get_db)):
             "samples": samples,
             "integrity_verified": verified
         }
-        if latest_burst.data_provenance == "LIVE":
+        if latest_burst.data_provenance in ("LIVE", "EDGE_HARDWARE"):
             hardware_stream_state = "LIVE HARDWARE"
         elif latest_burst.data_provenance == "SIMULATION":
             hardware_stream_state = "SIMULATION"
+        elif latest_burst.data_provenance in ("HISTORICAL", "RESEARCH_BENCHMARK"):
+            hardware_stream_state = "RESEARCH BENCHMARK"
 
     streams = [
         {
@@ -706,19 +728,24 @@ def get_joint_vision_evidence(joint: models.Joint, db: Session) -> Optional[dict
         return None
 
     meta = json.loads(latest_vis.processing_metadata_json) if latest_vis.processing_metadata_json else {}
+    has_damage = (latest_vis.total_detections_count or 0) > 0 and latest_vis.primary_damage_type not in {"NORMAL_SURFACE", "Belt Joint", None}
+    vis_status = latest_vis.primary_damage_type if has_damage else ("Belt Joint" if (latest_vis.total_detections_count or 0) > 0 else "NORMAL_SURFACE")
+
     return {
-        "status": meta.get("model_status", "TRAINED_MODEL"),
+        "status": vis_status,
         "observation_id": latest_vis.id,
         "camera_id": latest_vis.camera_id,
         "timestamp_utc": latest_vis.timestamp_utc,
         "model_version": latest_vis.model_version,
-        "model_status": meta.get("model_status", "UNKNOWN"),
+        "model_status": meta.get("model_status", "TRAINED_MODEL"),
         "source_type": latest_vis.source_type,
         "image_reference": latest_vis.image_reference,
         "total_detections": latest_vis.total_detections_count,
+        "total_detections_count": latest_vis.total_detections_count,
+        "has_damage": has_damage,
         "primary_damage_type": latest_vis.primary_damage_type,
         "max_confidence": latest_vis.max_confidence,
-        "prototype_severity": meta.get("prototype_severity", "NORMAL"),
+        "prototype_severity": meta.get("prototype_severity", "CRITICAL" if has_damage else "NORMAL"),
         "severity_label": meta.get("severity_label", "PROTOTYPE ENGINEERING THRESHOLD"),
         "detections": json.loads(latest_vis.detections_json) if latest_vis.detections_json else [],
         "independence_note": "Preserved independently from vibration/DSP without premature arbitrary weighting."
@@ -756,8 +783,11 @@ def get_joint_passport(joint_id: str, db: Session = Depends(get_db)):
     # Deterministic safety rule evaluation
     vibe_critical = joint.current_risk == "CRITICAL"
     vibe_warning = joint.current_risk == "WARNING"
-    vis_damage = vision_evidence and vision_evidence.get("primary_damage_type") in {"Large Tear", "Large Hole"}
-    vis_critical = vision_evidence and vision_evidence.get("prototype_severity") == "CRITICAL"
+    vis_damage = bool(vision_evidence and vision_evidence.get("has_damage"))
+    vis_critical = bool(vision_evidence and (
+        vision_evidence.get("prototype_severity") == "CRITICAL" or
+        vision_evidence.get("primary_damage_type") in {"Large Tear", "Large Hole"}
+    ))
 
     if vibe_critical or vis_critical:
         recommended_action = "TRIP_IMMEDIATE_STOP"
@@ -798,8 +828,8 @@ def get_joint_passport(joint_id: str, db: Session = Depends(get_db)):
             "operational_telemetry": {
                 "belt_speed_mps": 3.2,
                 "motor_current_a": 142.5,
-                "ambient_temperature_c": 34.2,
-                "bearing_temperature_c": 58.1,
+                "ambient_temperature_c": 28.5,
+                "bearing_temperature_c": 38.0,
                 "status": "NORMAL"
             }
         },
@@ -1013,7 +1043,7 @@ async def analyze_vision_frame(
     camera_id: str = Query("CAM-SPLICE-01"),
     joint_code: Optional[str] = Query(None),
     source_type: str = Query("RESEARCH_DATASET"),
-    conf_threshold: float = Query(0.20),
+    conf_threshold: float = Query(0.10),
     db: Session = Depends(get_db)
 ):
     """
@@ -1063,6 +1093,11 @@ async def analyze_vision_frame(
         if joint_rec:
             resolved_joint_id = joint_rec.id
 
+    # Ensure source_type and provenance satisfy database CHECK constraints
+    valid_source_types = ("RESEARCH_DATASET", "LIVE_CAMERA", "SIMULATION_TEST")
+    db_source_type = source_type if source_type in valid_source_types else "SIMULATION_TEST"
+    provenance = "HISTORICAL" if db_source_type == "RESEARCH_DATASET" else ("LIVE" if db_source_type == "LIVE_CAMERA" else "SIMULATION")
+
     # Persist VisionObservation
     vis_obs = models.VisionObservation(
         id=analysis_res["observation_id"],
@@ -1071,7 +1106,7 @@ async def analyze_vision_frame(
         camera_id=camera_id,
         timestamp_utc=analysis_res["timestamp_utc"],
         model_version=analysis_res["model_version"],
-        source_type=source_type,
+        source_type=db_source_type,
         image_reference=analysis_res["image_reference"],
         total_detections_count=analysis_res["total_detections"],
         primary_damage_type=analysis_res["primary_damage_type"],
@@ -1087,6 +1122,63 @@ async def analyze_vision_frame(
     db.add(vis_obs)
     db.commit()
 
+    # Automatically generate an AlertEvent if damage detected so system status and alerts page reflect it
+    if analysis_res.get("has_damage"):
+        alert_sev = analysis_res.get("prototype_severity", "WARNING")
+        alert_id = f"alert-vis-{uuid.uuid4().hex[:8]}"
+        target_joint_id = resolved_joint_id or "joint-001"
+        vis_alert = models.AlertEvent(
+            id=alert_id,
+            joint_id=target_joint_id,
+            conveyor_id="cv-main-01",
+            severity=alert_sev,
+            alert_type="SPLICE_FATIGUE_IMPACT",
+            message=f"Vision inspection flagged {analysis_res['total_detections']} defect(s). Primary: {analysis_res['primary_damage_type']} (Confidence: {analysis_res['max_confidence']*100:.1f}%). Immediate surface inspection advised.",
+            metrics_snapshot_json=json.dumps({
+                "detections": analysis_res["detections"],
+                "max_confidence": analysis_res["max_confidence"],
+                "camera_id": camera_id,
+                "frame_name": frame_name
+            }),
+            data_provenance=provenance
+        )
+        db.add(vis_alert)
+
+        # Update joint risk state to match defect severity
+        target_joint = db.query(models.Joint).filter(models.Joint.id == target_joint_id).first()
+        if target_joint:
+            target_joint.current_risk = alert_sev
+            db.add(target_joint)
+        db.commit()
+
+        await ws_manager.broadcast_json({
+            "type": "ALERT_TRIGGERED",
+            "alert": {
+                "id": vis_alert.id,
+                "joint_id": vis_alert.joint_id,
+                "severity": vis_alert.severity,
+                "alert_type": vis_alert.alert_type,
+                "message": vis_alert.message,
+                "triggered_at_utc": vis_alert.triggered_at_utc,
+                "is_acknowledged": False
+            }
+        })
+
+        # Broadcast correlated HEALTH_UPDATE so SCADA condition card updates immediately
+        health_score = 28.0 if alert_sev == "CRITICAL" else 64.0
+        await ws_manager.broadcast_json({
+            "type": "HEALTH_UPDATE",
+            "joint_id": target_joint_id,
+            "timestamp_utc": analysis_res["timestamp_utc"],
+            "health_score": health_score,
+            "risk_state": alert_sev,
+            "overall_status": alert_sev,
+            "rpm": 1200,
+            "tension": 110,
+            "data_provenance": "HISTORICAL" if source_type == "RESEARCH_DATASET" else "LIVE",
+            "explanation": f"Optical inspection confirmed surface defect: {analysis_res['primary_damage_type']} ({analysis_res['total_detections']} detections flagged)."
+        })
+
     # Broadcast over WebSocket
     ws_payload = {
         "type": "VISION_UPDATE",
@@ -1099,6 +1191,7 @@ async def analyze_vision_frame(
         "source_type": source_type,
         "frame_name": frame_name,
         "total_detections": analysis_res["total_detections"],
+        "total_detections_count": analysis_res["total_detections"],
         "has_damage": analysis_res["has_damage"],
         "primary_damage_type": analysis_res["primary_damage_type"],
         "max_confidence": analysis_res["max_confidence"],
@@ -1109,6 +1202,77 @@ async def analyze_vision_frame(
     await ws_manager.broadcast_json(ws_payload)
 
     return analysis_res
+
+@router.post("/vision/reset", tags=["Vision & Optical Monitoring"])
+async def reset_vision_status(
+    joint_id: str = Query("joint-001"),
+    db: Session = Depends(get_db)
+):
+    """Resets optical defect observations for a joint back to nominal healthy baseline."""
+    joint = db.query(models.Joint).filter(models.Joint.id == joint_id).first()
+    if joint and joint.current_risk in ("CRITICAL", "WARNING"):
+        joint.current_risk = "NORMAL"
+        db.add(joint)
+
+    obs_id = f"vis-obs-nominal-{uuid.uuid4().hex[:8]}"
+    now_iso = datetime.now(timezone.utc).isoformat()
+    vis_obs = models.VisionObservation(
+        id=obs_id,
+        joint_id=joint_id,
+        joint_code=joint.joint_code if joint else "J-01",
+        camera_id="CAM-SPLICE-01",
+        timestamp_utc=now_iso,
+        model_version="conveyor-damage-detector-v1",
+        source_type="SIMULATION_TEST",
+        image_reference="/api/v1/vision/frame/baseline",
+        total_detections_count=0,
+        primary_damage_type="NORMAL_SURFACE",
+        max_confidence=0.98,
+        detections_json="[]",
+        processing_metadata_json=json.dumps({
+            "model_status": "TRAINED_MODEL",
+            "prototype_severity": "NORMAL",
+            "severity_label": "PROTOTYPE ENGINEERING THRESHOLD",
+            "frame_name": "clean_surface.jpg"
+        })
+    )
+    db.add(vis_obs)
+    db.commit()
+
+    await ws_manager.broadcast_json({
+        "type": "VISION_UPDATE",
+        "observation_id": obs_id,
+        "camera_id": "CAM-SPLICE-01",
+        "joint_code": joint.joint_code if joint else "J-01",
+        "timestamp_utc": now_iso,
+        "model_status": "TRAINED_MODEL",
+        "model_version": "conveyor-damage-detector-v1",
+        "source_type": "SIMULATION_TEST",
+        "frame_name": "clean_surface.jpg",
+        "total_detections": 0,
+        "total_detections_count": 0,
+        "has_damage": False,
+        "primary_damage_type": "Healthy Belt",
+        "max_confidence": 0.98,
+        "prototype_severity": "NORMAL",
+        "image_reference": None,
+        "detections": []
+    })
+
+    await ws_manager.broadcast_json({
+        "type": "HEALTH_UPDATE",
+        "joint_id": joint_id,
+        "timestamp_utc": now_iso,
+        "health_score": 98.0,
+        "risk_state": "NORMAL",
+        "overall_status": "NORMAL",
+        "rpm": 1200,
+        "tension": 110,
+        "data_provenance": "SIMULATION",
+        "explanation": "Optical surface cleared. Conveyor belt operating within nominal baseline parameters."
+    })
+
+    return {"status": "SUCCESS", "message": "Vision observation reset to nominal baseline."}
 
 @router.get("/vision/observations", tags=["Vision & Optical Monitoring"])
 def get_vision_observations(
@@ -1197,6 +1361,40 @@ def get_analyzed_frame_image(observation_id: str):
     }
     media_type = media_map.get(ext, "image/jpeg")
     return FileResponse(str(file_path), media_type=media_type)
+
+@router.get("/vision/metrics", tags=["Vision & Optical Monitoring"])
+def get_vision_metrics():
+    """Returns trained YOLO model evaluation metrics and training artifact references."""
+    metrics_path = PROJECT_ROOT_PATH / "models" / "vision" / "conveyor_damage" / "evaluation.json"
+    data = {}
+    if metrics_path.exists():
+        with open(metrics_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            
+    data["artifacts"] = {
+        "confusion_matrix": "/api/v1/vision/artifacts/confusion_matrix.png",
+        "results_curve": "/api/v1/vision/artifacts/results.png",
+        "val_batch0_pred": "/api/v1/vision/artifacts/val_batch0_pred.jpg",
+        "val_batch1_pred": "/api/v1/vision/artifacts/val_batch1_pred.jpg",
+        "box_pr_curve": "/api/v1/vision/artifacts/BoxPR_curve.png"
+    }
+    return data
+
+@router.get("/vision/artifacts/{filename}", tags=["Vision & Optical Monitoring"])
+def get_vision_artifact(filename: str):
+    """Serves trained YOLO model plots and evaluation figures."""
+    clean_name = Path(filename).name
+    artifact_dir = PROJECT_ROOT_PATH / "models" / "vision" / "conveyor_damage" / "runs" / "train_run"
+    file_path = artifact_dir / clean_name
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"Artifact '{filename}' not found.")
+    ext = file_path.suffix.lower()
+    media_map = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png"
+    }
+    return FileResponse(str(file_path), media_type=media_map.get(ext, "image/png"))
 
 # ---------------------------------------------------------
 # 8B. Vibration ML & Anomaly Detection (Phase 4B)
@@ -1327,6 +1525,36 @@ def get_joint_maintenance_logs(
         models.MaintenanceLog.joint_id == joint.id
     ).order_by(models.MaintenanceLog.timestamp_utc.desc()).all()
     return logs
+
+# ---------------------------------------------------------
+# 9b. Historical Dataset Replay Controller
+# ---------------------------------------------------------
+
+@router.post("/historical/replay/start", tags=["Historical Dataset Replay"])
+def start_historical_replay(
+    condition: str = Query("ALL", pattern="^(ALL|NORMAL|FAULTY_BELT|UNBALANCED)$"),
+    speed_hz: float = Query(0.5, ge=0.1, le=5.0)
+):
+    """Starts continuous background replay of experimental Mendeley runs and optical frames."""
+    historical_replay_engine.start(condition=condition, speed_hz=speed_hz)
+    return {"status": "REPLAY_STARTED", **historical_replay_engine.get_status()}
+
+@router.post("/historical/replay/stop", tags=["Historical Dataset Replay"])
+def stop_historical_replay():
+    """Stops background historical replay."""
+    historical_replay_engine.stop()
+    return {"status": "REPLAY_STOPPED", **historical_replay_engine.get_status()}
+
+@router.post("/historical/replay/step", tags=["Historical Dataset Replay"])
+async def step_historical_replay():
+    """Executes a single step of historical replay across DSP, ML, and Vision."""
+    step_res = await historical_replay_engine.step_replay()
+    return {"status": "STEP_EXECUTED", "step": step_res, **historical_replay_engine.get_status()}
+
+@router.get("/historical/replay/status", tags=["Historical Dataset Replay"])
+def get_historical_replay_status():
+    """Returns current historical replay playback status."""
+    return historical_replay_engine.get_status()
 
 # ---------------------------------------------------------
 # 10. WebSocket Streaming Endpoint

@@ -4,8 +4,10 @@ from pydantic import BaseModel, Field, field_validator
 
 class DataProvenance(str, Enum):
     LIVE = "LIVE"
+    EDGE_HARDWARE = "EDGE_HARDWARE"
     SIMULATION = "SIMULATION"
     HISTORICAL = "HISTORICAL"
+    RESEARCH_BENCHMARK = "RESEARCH_BENCHMARK"
 
 class QualityFlag(str, Enum):
     OK = "OK"

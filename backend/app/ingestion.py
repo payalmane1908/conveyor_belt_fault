@@ -76,14 +76,14 @@ class IngestionService:
                 detail=f"Device '{packet.device_id}' is not registered in the system. Register device first."
             )
 
-        if packet.data_provenance == schemas.DataProvenance.LIVE:
+        if packet.data_provenance in (schemas.DataProvenance.LIVE, schemas.DataProvenance.EDGE_HARDWARE):
             if device.is_trusted_hardware != 1 or device.status != "ACTIVE":
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=(
                         f"Device '{packet.device_id}' is not an active trusted hardware device "
                         f"(status='{device.status}', trusted={device.is_trusted_hardware}). "
-                        f"Untrusted devices cannot submit LIVE telemetry."
+                        f"Untrusted devices cannot submit {packet.data_provenance.value} telemetry."
                     )
                 )
 

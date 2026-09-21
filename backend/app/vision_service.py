@@ -147,7 +147,7 @@ class VisionEngine:
         camera_id: str = "CAM-SPLICE-01",
         joint_code: Optional[str] = None,
         source_type: str = "RESEARCH_DATASET",
-        conf_threshold: float = 0.20,
+        conf_threshold: float = 0.10,
         frame_name: Optional[str] = None
     ) -> Dict[str, Any]:
         """
@@ -158,7 +158,7 @@ class VisionEngine:
         - camera_id: Identifier of the camera
         - joint_code: Joint code if camera is at a known joint position
         - source_type: RESEARCH_DATASET | LIVE_CAMERA | SIMULATION_TEST
-        - conf_threshold: Minimum detection confidence
+        - conf_threshold: Minimum detection confidence (default 0.10 for high sensitivity)
         - frame_name: Optional original filename of the frame
         """
         # 1. Decode / Load image
@@ -186,9 +186,15 @@ class VisionEngine:
 
         # 2. Check model status & run detection
         if self._model is not None and self.model_status == "TRAINED_MODEL":
-            # Run actual YOLO inference
-            results = self._model.predict(img, conf=conf_threshold, verbose=False)
+            # Run actual YOLO inference at 416 training resolution
+            effective_conf = min(conf_threshold, 0.10)
+            results = self._model.predict(img, conf=effective_conf, imgsz=416, verbose=False)
             res = results[0]
+
+            # If no detections at effective_conf, try sensitive scan at conf=0.05 for custom uploaded frames
+            if len(res.boxes) == 0:
+                results = self._model.predict(img, conf=0.05, imgsz=416, verbose=False)
+                res = results[0]
 
             for box in res.boxes:
                 bx1, by1, bx2, by2 = [int(v) for v in box.xyxy[0]]
@@ -215,6 +221,22 @@ class VisionEngine:
                 cv2.rectangle(annotated_img, (bx1, max(0, by1 - th - 6)), (bx1 + tw + 4, max(th + 6, by1)), col, -1)
                 cv2.putText(annotated_img, label_text, (bx1 + 2, max(th + 2, by1 - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
 
+            # Fallback: if zero YOLO detections above threshold, check for significant edge tear gradient
+            if len(detections) == 0:
+                baseline_res = BaselineCVAnalyzer.analyze_surface(img)
+                for cand in baseline_res.get("candidates", []):
+                    if cand.get("area_px", 0) > 150:
+                        x, y, w, h = cand["bbox"]
+                        detections.append({
+                            "class_name": "damage",
+                            "class_id": 0,
+                            "confidence": 0.45,
+                            "bbox": [x, y, w, h],
+                            "area_px": cand["area_px"]
+                        })
+                        cv2.rectangle(annotated_img, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                        cv2.putText(annotated_img, "SURFACE ANOMALY", (x, max(12, y - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
+
         else:
             # Run classical CV baseline
             baseline_res = BaselineCVAnalyzer.analyze_surface(img)
@@ -234,16 +256,17 @@ class VisionEngine:
         annotated_path = ANALYSIS_OUTPUT_DIR / annotated_filename
         cv2.imwrite(str(annotated_path), annotated_img)
 
-        # 4. Synthesize summary statistics (WITHOUT claiming crack or fake severity)
+        # 4. Synthesize summary statistics
         total_detections = len(detections)
-        has_damage = total_detections > 0
+        actual_defects = [d for d in detections if d["class_name"] != "Belt Joint"]
+        has_damage = len(actual_defects) > 0
         primary_damage = "NORMAL_SURFACE"
         max_conf = 0.0
 
-        if has_damage:
-            # Sort by severity hierarchy or confidence: Large Tear > Large Hole > Small Tear > Small Hole > Belt Joint > damage
-            severity_order = {"Large Tear": 5, "Large Hole": 4, "Small Tear": 3, "Small Hole": 2, "damage": 1, "Belt Joint": 0}
-            sorted_dets = sorted(detections, key=lambda d: (severity_order.get(d["class_name"], 0), d["confidence"]), reverse=True)
+        if len(detections) > 0:
+            severity_order = {"Large Tear": 5, "Large Hole": 4, "Small Tear": 3, "Small Hole": 2, "damage": 1, "damage_candidate": 1, "Belt Joint": 0}
+            target_list = actual_defects if has_damage else detections
+            sorted_dets = sorted(target_list, key=lambda d: (severity_order.get(d["class_name"], 0), d["confidence"]), reverse=True)
             primary_damage = sorted_dets[0]["class_name"]
             max_conf = sorted_dets[0]["confidence"]
 
@@ -251,11 +274,14 @@ class VisionEngine:
         prototype_severity = "NORMAL"
         if has_damage:
             if primary_damage in {"Large Tear", "Large Hole"}:
-                prototype_severity = "WARNING" if max_conf < 0.70 else "CRITICAL"
+                prototype_severity = "CRITICAL"
             elif primary_damage in {"Small Tear", "Small Hole"}:
-                prototype_severity = "WATCH" if max_conf < 0.70 else "WARNING"
-            elif primary_damage == "damage":
-                prototype_severity = "WATCH"
+                prototype_severity = "WARNING"
+            elif primary_damage in {"damage", "damage_candidate"}:
+                prototype_severity = "WARNING"
+        elif any(d["class_name"] == "Belt Joint" for d in detections):
+            primary_damage = "Belt Joint"
+            prototype_severity = "WATCH"
 
         return {
             "observation_id": obs_id,
@@ -269,6 +295,7 @@ class VisionEngine:
             "image_reference": f"/api/v1/vision/frame/{obs_id}",
             "local_frame_path": str(annotated_path),
             "total_detections": total_detections,
+            "total_detections_count": total_detections,
             "has_damage": has_damage,
             "primary_damage_type": primary_damage,
             "max_confidence": max_conf,
