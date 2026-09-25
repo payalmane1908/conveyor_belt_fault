@@ -1,4 +1,4 @@
-# Conveyor Belt Joint Rupture & Failure Prevention System
+﻿# Conveyor Belt Joint Rupture & Failure Prevention System
 ### Smart India Hackathon (SIH26008) — Industrial Hardware & Software Prototype
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?style=flat&logo=fastapi)](https://fastapi.tiangolo.com)
@@ -37,6 +37,9 @@
 9. [REST API & WebSocket Specifications](#-rest-api--websocket-specifications)
 10. [Scientific Datasets & Citations](#-scientific-datasets--citations)
 11. [Engineering Defense & FAQ](#-engineering-defense--faq)
+12. [Phase-by-Phase Work Done](#phase-by-phase-work-done)
+13. [Future Vision -- Where This Goes Next](#future-vision----where-this-goes-next)
+14. [Current Build Status](#current-build-status)
 
 ---
 
@@ -534,3 +537,248 @@ ISO 10816 provides general vibration severity guidelines for rigid rotating indu
 - **Team**: SIH26008 Hardware Prototype Engineering Team
 - **Competition**: Smart India Hackathon (SIH) — Hardware Edition
 - **Mentorship & Evaluation**: Dedicated to industrial plant operators and mining reliability engineers striving for zero unplanned downtime and safe conveyor operations.
+
+
+---
+
+## Phase-by-Phase Work Done
+
+This section is a plain-language account of every phase built -- written so that anyone reading this for the first time can understand what exists, how it works, and why.
+
+---
+
+### Phase 1 -- Data Ingestion & Database Foundation
+
+**Goal**: Build the plumbing -- receive raw vibration data from the ESP32, validate it, store it safely, and track data integrity.
+
+**What was built**:
+
+10 SQLAlchemy database tables in SQLite WAL mode (`backend/app/models.py`):
+
+| Table | Purpose |
+| :--- | :--- |
+| `devices` | Registry of trusted ESP32 hardware nodes |
+| `sensors` | Sensor specs (ADXL345, MPU6050, etc.) |
+| `conveyors` | Physical conveyor configuration |
+| `belts` | Individual belt instances |
+| `joints` | Each splice joint with its identity token |
+| `sensor_attachments` | Sensor-to-conveyor mounting records |
+| `raw_vibration_bursts` | Every burst of raw samples + SHA-256 hash |
+| `stream_trackers` | Sequence counter & packet-loss tracking |
+| `joint_observations` | DSP features + health scores per joint passage |
+| `alert_events` | Evidence-based alarms with full metrics snapshot |
+
+**Ingestion pipeline** (`backend/app/ingestion.py`):
+- Validates every incoming JSON packet (device ID, sensor ID, sequence number, samples, quality flags, provenance tag).
+- Handles 32-bit microsecond **timestamp rollover** -- unwraps the counter into a continuous 64-bit clock automatically.
+- Packs raw float samples into IEEE-754 binary and computes a **SHA-256 cryptographic hash** stored alongside the data.
+- Detects sequence gaps and logs dropped packets.
+- Enforces `LIVE` provenance on `/telemetry/ingest` -- simulation packets are rejected with a 400 error.
+
+**Test coverage**: 23 unit tests -- schema validation, SHA-256 correctness, sequence tracking, duplicate detection, rollover handling, provenance enforcement.
+
+---
+
+### Phase 2 -- Real-Time WebSocket & SCADA HMI
+
+**Goal**: Stream data live to the operator screen with no page refreshes.
+
+**WebSocket Manager** (`backend/app/websocket_manager.py`) broadcasts three event types to all connected browser tabs simultaneously:
+- `TELEMETRY_BURST` -- raw waveform samples for the live oscilloscope canvas.
+- `HEALTH_UPDATE` -- health score, risk state, and DSP metrics.
+- `ALERT_DISPATCH` -- real-time alarm notification.
+
+**Simulation harness** (`backend/app/simulator.py`) -- four physically meaningful synthetic fault modes:
+
+| Mode | Signal | What DSP Sees |
+| :--- | :--- | :--- |
+| `NORMAL` | 50 Hz sine + low Gaussian noise | Low crest factor (~1.5), kurtosis = 0 |
+| `SPLICE_IMPACT` | Periodic high-amplitude impulse spikes | Crest factor spikes to 2.8+, kurtosis rises |
+| `HARMONIC_LOOSENESS` | 50 Hz + 100 Hz + 150 Hz harmonics | Multi-peak FFT, elevated spectral energy |
+| `CRITICAL_FAILURE` | Broadband energy + massive impacts | RMS > 4 g, Crest Factor > 4 |
+
+**Test coverage**: WebSocket connection, API route ordering (API must not be intercepted by static file mount), simulation pipeline.
+
+---
+
+### Phase 3 -- Digital Signal Processing & Health Engine
+
+**Goal**: Extract engineering metrics from raw vibration arrays, compute a health score, and trigger evidence-based alarms automatically on every burst.
+
+**DSP Analyser** (`backend/app/dsp.py`) -- 8 metrics per burst:
+
+| Metric | What It Tells Us |
+| :--- | :--- |
+| **RMS Acceleration** | Overall vibration severity |
+| **Peak Acceleration** | Worst-case instantaneous shock |
+| **Peak-to-Peak** | Full waveform excursion |
+| **Crest Factor** (Peak / RMS) | Impulsive shocks from cracked joint fingers |
+| **Excess Kurtosis** | Impulsiveness -- Gaussian = 0, sharp impacts >> 0 |
+| **Skewness** | Waveform asymmetry |
+| **Dominant FFT Frequency** | Which frequency carries most energy |
+| **Spectral Centroid & Energy** | Overall spectral character |
+
+**Rolling baseline** -- per joint, using **Median + MAD (robust statistics)**. Only NORMAL observations update the baseline so fault events cannot contaminate the reference. Deviations are expressed as robust z-scores.
+
+**Health score (0-100)**:
+```
+Score = 100 - (35% x vibration_penalty  + 30% x shock_penalty
+             + 15% x frequency_penalty  + 20% x persistence_penalty)
+```
+All four weights are configurable in `config.py` -- not hard-coded magic numbers.
+
+**Hysteresis risk state machine** -- prevents alarm chattering:
+```
+NORMAL --(2 anomalies)--> WATCH --(1)--> WARNING --(1)--> CRITICAL
+CRITICAL --(3 healthy)--> WARNING --(3)--> WATCH --(3)--> NORMAL
+```
+
+**Alert generation**: every `AlertEvent` stores severity, alert type, and a full DSP metrics snapshot. Alert text always says "anomaly detected" -- never "failure confirmed."
+
+**Test coverage**: 35+ tests -- RMS mathematical correctness, FFT frequency accuracy (+/- 1 Hz), single-anomaly does NOT flip CRITICAL, full recovery path CRITICAL -> NORMAL, alert creation and acknowledgement.
+
+---
+
+### Phase 4A -- Condition-Aware Machine Learning
+
+**Goal**: Add an ML layer that learns what "normal" looks like at a specific belt speed and tension, then flags deviations -- without fixed thresholds.
+
+**Real peer-reviewed dataset used**:
+- Mendeley Data -- *Experimental vibration data for a belt drive system under different operating conditions*
+- DOI: `10.17632/jf8v2ndydr.1` | License: CC BY 4.0
+- 459 runs x 17 speeds (400-2000 RPM) x 3 pretension levels (70 / 110 / 150 N)
+
+**Training pipeline** (`ml/train_vibration_anomaly.py`):
+- Training set: ONLY normal runs, Repetitions 1 & 2 (204 runs). Repetition 3 + all faulty/unbalanced runs (255 runs) are a completely frozen test set.
+- Model: `RobustScaler` -> `IsolationForest` (150 estimators, 10% contamination).
+- **Condition-aware 10-feature vector**: `[speed_rpm, pretension_n, driver_rms, driver_peak, driver_crest_factor, driver_kurtosis, driver_dominant_freq_hz, driven_rms, driven_crest_factor, driven_dominant_freq_hz]` -- the first two features (speed + tension) prevent false alarms from simple load changes.
+
+**Saved artifacts** (`models/ml/vibration_anomaly/`): trained pipeline `.joblib`, `training_metadata.json`, genuine `evaluation.json` (ROC-AUC, Average Precision, F1), and `feature_schema.json`.
+
+**Live inference** (`backend/app/ml_service.py`): if RPM + tension are available -> scores the feature vector; if missing -> returns `WAITING_FOR_OPERATING_CONTEXT` and refuses to guess.
+
+**Test coverage**: 15+ tests -- artifact loading, pipeline structure, feature schema, zero synthetic contamination in training, finite valid anomaly scores.
+
+---
+
+### Phase 4B -- Computer Vision Defect Detection (YOLOv8)
+
+**Goal**: Give the system "eyes" -- detect visible surface damage from camera images of the belt.
+
+**Dataset**: 651 high-resolution images, 1,708 COCO bounding-box annotations across 6 classes: `Belt Joint`, `Large Tear`, `Small Tear`, `Large Hole`, `Small Hole`, `damage`.
+
+**Training pipeline** (`vision/train.py`): fine-tunes YOLOv8 nano (`yolov8n.pt`) and saves `best_model.pt` + real `evaluation.json` with mAP@0.5, precision, and recall.
+
+**Vision Service** (`backend/app/vision_service.py`): `VisionEngine` runs YOLOv8 inference on uploaded frames; `BaselineCVAnalyzer` provides a classical edge-detection fallback when no trained model is present. Every analyzed frame is saved as a `VisionObservation` database record linked to the active joint.
+
+**Critical architectural decision** -- vision and vibration are **kept separate**:
+```
+Vibration DSP ---+
+                 +--> Joint Passport (side-by-side, independent)
+Computer Vision --+
+```
+They are NOT fused with arbitrary weights. Each appears as an independent line of evidence, and the health engine only escalates to CRITICAL when both simultaneously indicate a problem.
+
+**Test coverage**: dataset structure, class name scientific fidelity (no "Crack" class allowed), YOLO loading, inference schema, database persistence, multi-evidence Joint Passport API.
+
+---
+
+### Phase 5A -- Hardware Readiness & Edge DAQ
+
+**Goal**: Document exactly what hardware exists, what software is ready, and what is blocked -- with complete honesty.
+
+Built a formal **Hardware Readiness Audit** (`edge/HARDWARE_READINESS.md`) that classifies every component into one of five tiers: AVAILABLE / SOFTWARE-READY / NOT YET AVAILABLE / HARDWARE-BLOCKED / FUTURE.
+
+Also built:
+- **Serial Worker** (`backend/app/serial_worker.py`): background thread reads line-buffered JSON from the ESP32 USB port, passes every packet through the full ingestion -> DSP -> health -> WebSocket pipeline. Falls back to historical dataset replay when no hardware is connected.
+- **Virtual HTTP Emitter** (`edge/virtual_serial_emitter.py`): simulates the ESP32 JSON output over HTTP. Full pipeline validation without any hardware.
+- **Hardware Bridge** (`edge/hardware_bridge.py`): production bridge script -- enforces `LIVE` provenance and refuses to start if hardware is not detected.
+
+---
+
+### Phase 5B -- ESP32 Firmware & Digital Joint Passport
+
+**Goal**: Write the actual microcontroller firmware and build per-joint lifetime tracking.
+
+**ESP32 firmware** (`edge/firmware/esp32_sensor_node/`):
+- **Core 0** (sensor core): hardware timer fires every 1 ms -> SPI read of ADXL345 -> ring buffer.
+- **Core 1** (comms core): every ~100 ms -> reads ring buffer -> serializes JSON -> UART TX at 115200 baud.
+- Supports ADXL345 (VSPI, +-16 g, 13-bit) and MPU6050 (fast I2C, 400 kHz) via a clean `SensorInterface.h` C++ abstraction.
+- `GPIO 2` onboard LED blinks on every burst as a live hardware heartbeat.
+
+**Digital Joint Passport** (`backend/app/joint_lifecycle_service.py`):
+- Tracks every individual splice joint (J-01, J-02 ...) -- physical position, splice type, installation date, total revolutions, current risk state.
+- Computes **linear regression of RMS vs. revolution index** -> reports degradation slope in `g/revolution`. Returns `INSUFFICIENT_HISTORY` if fewer than 5 observations exist.
+- **Tamper-evident maintenance ledger**: every technician action (SPLICE_REPAIR, RETENSIONING, RECALIBRATION, INSPECTION, REPLACEMENT) is committed with a deterministic SHA-256 audit digest to SQLite WAL. Survives server restarts. Any record tampering is immediately detectable.
+
+---
+
+## Future Vision -- Where This Goes Next
+
+The current prototype proves the core engineering concept on a lab test-rig. Below is the honest, staged roadmap for scaling this into a production industrial system.
+
+### Near-Term (Next 3-6 Months)
+
+| Goal | What Needs to Happen |
+| :--- | :--- |
+| **Real RPM telemetry** | Wire the Hall-effect tachometer to GPIO 4 on the ESP32. Firmware interrupt code is already written. |
+| **Dynamic pretension measurement** | Add an in-line strain-gauge load cell on the take-up carriage. Backend already handles `pretension_n` -- just needs the physical sensor. |
+| **RFID joint identification** | Wire the RC522 reader. Schema and fallback `joint_id = "unavailable"` are already in place. |
+| **Field data collection** | Deploy a node on a real industrial conveyor (even a short test-rig at a quarry or port) and collect 2-4 weeks of labelled normal + loaded + fault runs. |
+| **Baseline recalibration from field data** | Re-fit the Isolation Forest on genuine field NORMAL runs to replace the lab benchmark baseline. |
+
+### Medium-Term (6-18 Months)
+
+| Goal | What Needs to Happen |
+| :--- | :--- |
+| **Multi-joint, multi-node network** | Replace single-node USB with a distributed RS-485 Modbus sensor bus. One backend managing 5-10 splice zones along a single conveyor. |
+| **Cloud dashboard & mobile alerts** | Move from local SQLite to TimescaleDB / PostgreSQL. Add MQTT pushes so supervisors get WhatsApp / SMS / email alerts automatically. |
+| **Longitudinal degradation modelling** | With 3-6 months of real revolution data, fit a proper degradation curve (Weibull, Paris Law for crack propagation) and introduce a defensible RUL estimate with confidence intervals. |
+| **Thermal splice monitoring** | Add an infrared pyrometer array to detect abnormal heat build-up at splice points during high-speed loading -- a leading indicator of vulcanization bond failure. |
+| **Computer vision on live belt feed** | Mount a dedicated machine-vision camera above the splice zone triggered on each joint passage. Replace the "upload a frame" model with a continuous live detection pipeline. |
+
+### Long-Term (Industrial Production)
+
+| Goal | What Needs to Happen |
+| :--- | :--- |
+| **SIL-rated hardware interlock** | Pair the software SCADA trip recommendation with an IEC 61508 / SIL-3 certified hardware relay to actually cut power to the conveyor drive -- removing the software-only `[SIMULATED INTERLOCK]` label. |
+| **ATEX / explosion-proof enclosure** | Deploy in underground coal mines or refineries -- requires Ex-d or Ex-e certified enclosures for the ESP32 DAQ node. |
+| **ISO/IEC certification & audit trail** | Prepare the cryptographic evidence vault and maintenance ledger for third-party industrial safety audits (ISO 13374 condition monitoring). |
+| **Federated multi-site learning** | Multiple mine sites contribute anonymized feature statistics to a shared anomaly model -- improving detection accuracy without sharing raw sensor data. |
+| **Digital Twin integration** | Feed real-time health scores and degradation slopes into an FEA-based digital twin of the belt splice joint -- enabling physics-informed failure mode prediction beyond statistical thresholds. |
+
+### The Bigger Picture
+
+This project demonstrates that it is possible to build a **scientifically honest, end-to-end predictive maintenance platform** without:
+- Fabricating hardware readings
+- Inventing fake RUL countdowns
+- Claiming unsupported ISO compliance
+- Black-box fusion of evidence streams
+
+The same architecture -- edge DAQ -> DSP -> condition-aware ML -> cryptographic audit -> SCADA -- can be applied to any rotating industrial asset: compressor valves, pump impellers, gearbox pinions, or structural bridge cables. The conveyor splice joint is the first use-case. It will not be the last.
+
+---
+
+## Current Build Status
+
+| Subsystem | Status | Verified By |
+| :--- | :---: | :--- |
+| FastAPI backend (40+ REST endpoints) | Complete | `python backend/main.py` |
+| SQLite WAL database (10 tables) | Complete | `init_db()` + `migrate_db()` |
+| SHA-256 ingestion pipeline | Complete | `test_phase1_ingestion.py` |
+| DSP engine (8 metrics + MAD baseline) | Complete | `test_phase3_dsp_and_health.py` |
+| Health score + hysteresis state machine | Complete | `test_phase3_dsp_and_health.py` |
+| Isolation Forest ML (trained + live) | Complete | `test_phase4_vibration_ml.py` |
+| YOLOv8 vision service | Complete | `test_vision_pipeline.py` |
+| Digital Joint Passport + ledger | Complete | `test_phase5_edge_daq_and_lifecycle.py` |
+| ESP32 dual-core firmware | Complete | `edge/firmware/esp32_sensor_node/` |
+| Hardware bridge + virtual emitter | Complete | `edge/hardware_bridge.py` |
+| React 19 SCADA dashboard (8 pages) | Complete | `npm run build` |
+| WebSocket live telemetry | Complete | `ws://127.0.0.1:8001/ws/v1/live-telemetry` |
+| Fault scenario selector (4 modes) | Complete | Control Room -> Scenario Dropdown |
+| Test suite | 82 passed, 1 skipped | `pytest backend/tests/ -v` |
+| **Tachometer physical wiring** | Pending | Firmware ready, sensor not yet wired |
+| **RFID reader physical wiring** | Pending | Schema ready, hardware not yet wired |
+| **Dynamic pretension load cell** | Pending | API ready, physical sensor not installed |
+| Field validation on real conveyor | Future | Post-hackathon |
+| SIL-3 certified hardware trip relay | Future | Production deployment |
