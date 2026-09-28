@@ -70,7 +70,7 @@
 ### Part 1: The Problem & Engineering Context
 
 Conveyor belts in industrial mining and material handling facilities operate under continuous tension (e.g. 110 N on test rigs, tens of kilonewtons in mine sites) transporting hundreds of tons of bulk material per hour. 
-- **The Critical Failure Mode**: Belt splices (vulcanized finger joints or mechanical fasteners) represent the single weakest structural link in the entire conveyor circuit. A catastrophic splice separation results in sudden belt rupture, catastrophic pull-back, severe structural damage to pulleys, extended unplanned plant downtime (costing upwards of $50,000/hour in mining operations), and severe personnel safety risks.
+- **The Critical Failure Mode**: Belt splices (vulcanized finger joints or mechanical fasteners) are critical failure points in conveyor systems. Unplanned belt failure can cause significant production downtime, maintenance cost and safety risk. A catastrophic splice separation results in sudden belt rupture, violent pull-back, severe structural damage to pulleys, extended unplanned plant downtime, and serious personnel safety risks.
 - **Why Traditional Methods Fail**: Periodic manual visual inspections only detect damage *after* visible surface cracking or delamination has occurred. Point vibration sensors placed on distant bearing housings attenuate high-frequency splice impact transients.
 - **Our Solution**: Continuous, high-rate (1000 Hz) time-domain and frequency-domain digital signal processing combined with condition-aware Machine Learning (Isolation Forest) and synchronized optical inspection. Every vibration burst is cryptographically hashed with SHA-256 for auditability and tamper evidence.
 
@@ -190,7 +190,7 @@ Instead, we implement deterministic canonical cryptographic provenance:
 
 | Subsystem / Metric | Verification Status | Artifact / Command |
 | :--- | :--- | :--- |
-| **Backend Test Suite** | 84 passed, 1 skipped, 0 failed | `python -m pytest backend/tests/ -v` |
+| **Backend Test Suite** | **84 passed, 1 skipped, 0 failed** (Phase 1 verified) | `python -m pytest backend/tests/ -v` |
 | **Frontend Production Build** | Zero TypeScript / Vite errors | `npm run build` inside `frontend/` |
 | **Hardware DAQ Bridge** | Validated against ESP32 firmware | `python edge/hardware_bridge.py --list-ports` |
 | **Virtual HTTP Emitter** | Validated with backend seq-sync | `python edge/virtual_serial_emitter.py --mode http` |

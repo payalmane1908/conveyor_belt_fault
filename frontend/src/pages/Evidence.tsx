@@ -189,7 +189,7 @@ export const Evidence: React.FC = () => {
                 <span>Model Size: 6.2 MB</span>
                 <span className="text-emerald-600 font-bold flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Active Inference Engine</span>
+                  <span>On-Demand Inference [PROTOTYPE]</span>
                 </span>
               </div>
             </div>

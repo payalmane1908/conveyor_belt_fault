@@ -8,17 +8,19 @@
 
 | ESP32 Pin | Function | Peripheral | Connected Signal | Notes |
 | :--- | :--- | :--- | :--- | :--- |
-| **GPIO 5** | VSPI CS | ADXL345 | **CS** (Chip Select) | Active LOW |
-| **GPIO 18** | Input (Pull-up) | Tachometer | **TACHO_PULSE** | Falling edge hardware interrupt |
-| **GPIO 19** | Input (Pull-up) | Joint Trigger | **JOINT_TRIGGER** | Optical retro-reflector / Hall latch |
-| **GPIO 23** | VSPI MOSI | ADXL345 | **SDA / MOSI** | Hardware SPI Master Out |
-| **GPIO 19\*** | VSPI MISO | ADXL345 | **SDO / MISO** | Hardware SPI Master In *(or shared)* |
-| **GPIO 18\*** | VSPI SCK | ADXL345 | **SCL / SCK** | Hardware SPI Clock |
-| **GPIO 21** | I2C SDA | MPU6050 | **SDA** | 400 kHz Fast-mode I2C |
-| **GPIO 22** | I2C SCL | MPU6050 | **SCL** | 400 kHz Fast-mode I2C |
-| **GPIO 2** | Output | Status LED | **LED_HEARTBEAT** | Onboard Blue LED (blinks on DAQ) |
-| **3V3** | Power | Accelerometer | **VCC / 3.3V** | Do NOT connect to 5V! |
-| **GND** | Ground | Common | **GND** | Common system ground reference |
+| **GPIO 5**  | VSPI CS    | ADXL345         | **CS** (Chip Select)       | Active LOW |
+| **GPIO 18** | VSPI SCK   | ADXL345         | **SCL / SCK**              | Hardware SPI Clock |
+| **GPIO 19** | VSPI MISO  | ADXL345         | **SDO / MISO**             | Hardware SPI Master In |
+| **GPIO 23** | VSPI MOSI  | ADXL345         | **SDA / MOSI**             | Hardware SPI Master Out |
+| **GPIO 4**  | Input (Pull-up) | Tachometer | **TACHO_PULSE**            | Falling edge ISR — **dedicated, no SPI conflict** |
+| **GPIO 15** | Input (Pull-up) | Joint Trigger | **JOINT_TRIGGER**       | Falling edge ISR — Hall-effect / optical retro-reflector |
+| **GPIO 21** | I2C SDA    | MPU6050 (alt)   | **SDA**                    | 400 kHz Fast-mode I2C (if using MPU6050) |
+| **GPIO 22** | I2C SCL    | MPU6050 (alt)   | **SCL**                    | 400 kHz Fast-mode I2C (if using MPU6050) |
+| **GPIO 2**  | Output     | Status LED      | **LED_HEARTBEAT**          | Onboard Blue LED (blinks on DAQ) |
+| **3V3**     | Power      | Accelerometer   | **VCC / 3.3V**             | Do NOT connect to 5V! |
+| **GND**     | Ground     | Common          | **GND**                    | Common system ground reference |
+
+> **Pin Conflict Resolution (Phase 2):** GPIO 18 and 19 are reserved exclusively for the VSPI SPI bus (ADXL345). The tachometer interrupt is on **GPIO 4** and the joint trigger is on **GPIO 15** — both interrupt-capable pins with no SPI bus sharing.
 
 ---
 

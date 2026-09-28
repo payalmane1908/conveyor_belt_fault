@@ -25,7 +25,8 @@ import {
   Send,
   Loader2,
   TrendingDown,
-  Info
+  Info,
+  Printer
 } from 'lucide-react';
 
 export const JointPassport: React.FC = () => {
@@ -145,13 +146,24 @@ export const JointPassport: React.FC = () => {
           </div>
         </div>
 
-        <button
-          onClick={() => setShowLogModal(true)}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0052cc] hover:bg-[#0047ba] text-white font-bold text-xs transition-colors cursor-pointer shadow-2xs"
-        >
-          <Wrench className="w-3.5 h-3.5" />
-          <span>Log Maintenance Action</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => window.print()}
+            title="Export / Print Joint Passport report"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer border border-slate-200 shadow-2xs"
+          >
+            <Printer className="w-3.5 h-3.5 text-slate-600" />
+            <span>Export PDF / Print</span>
+          </button>
+
+          <button
+            onClick={() => setShowLogModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0052cc] hover:bg-[#0047ba] text-white font-bold text-xs transition-colors cursor-pointer shadow-2xs"
+          >
+            <Wrench className="w-3.5 h-3.5" />
+            <span>Log Maintenance Action</span>
+          </button>
+        </div>
       </div>
 
       {/* 2. 2D TOPOLOGICAL CONVEYOR BELT LOOP MAP */}
@@ -196,7 +208,7 @@ export const JointPassport: React.FC = () => {
                     {statusPres.label}
                   </div>
                   <div className="text-[9px] text-slate-400 mt-0.5">
-                    {j.total_revolutions_count || 889} rev
+                    {j.total_revolutions_count ?? 0} rev
                   </div>
                 </button>
               );
@@ -207,7 +219,7 @@ export const JointPassport: React.FC = () => {
             {/* Tail Pulley Marker */}
             <div className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
               <span className="text-[9px] text-slate-400 font-bold uppercase block">Tail Pulley</span>
-              <span className="text-xs font-extrabold text-amber-600">TAKE-UP (110 N)</span>
+              <span className="text-xs font-extrabold text-amber-600">TAKE-UP</span>
             </div>
           </div>
         </div>
@@ -235,15 +247,15 @@ export const JointPassport: React.FC = () => {
             </div>
             <div className="flex justify-between border-b border-slate-50 pb-1.5">
               <span className="text-slate-500">Installation:</span>
-              <span className="text-slate-700 font-medium">{identity?.installation_date || '2026-01-15'}</span>
+              <span className="text-slate-700 font-medium">{identity?.installation_date || 'Commissioned'}</span>
             </div>
             <div className="flex justify-between border-b border-slate-50 pb-1.5">
               <span className="text-slate-500">Revolutions:</span>
-              <span className="text-blue-600 font-extrabold">{identity?.total_revolutions || 889} rev</span>
+              <span className="text-blue-600 font-extrabold">{identity?.total_revolutions ?? 0} rev</span>
             </div>
             <div className="flex justify-between border-b border-slate-50 pb-1.5">
               <span className="text-slate-500">Distance Travelled:</span>
-              <span className="text-slate-800 font-medium">{exposure?.distance_travelled_km?.toFixed(1) || '177.8'} km</span>
+              <span className="text-slate-800 font-medium">{exposure?.distance_travelled_km != null ? `${exposure.distance_travelled_km.toFixed(1)} km` : '0.0 km'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Cumulative Tonnage:</span>
@@ -310,16 +322,21 @@ export const JointPassport: React.FC = () => {
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
                   <span>SCADA Operational:</span>
                 </span>
-                <span className="text-emerald-600">{sources?.operational_telemetry?.status || '1200 RPM'}</span>
+                <span className="text-emerald-600 text-xs">
+                  {sources?.operational_telemetry?.drive_rpm != null
+                    ? `${sources.operational_telemetry.drive_rpm} RPM`
+                    : (sources?.operational_telemetry?.status || 'Awaiting Hardware')}
+                </span>
               </div>
-              <div className="text-[11px] text-slate-400 mt-1">
-                Bearing Temp: {sources?.operational_telemetry?.bearing_temperature_c || 58}°C
+              <div className="text-[11px] text-slate-400 mt-1 flex justify-between">
+                <span>Amb Temp: {sources?.operational_telemetry?.ambient_temperature_c != null ? `${sources.operational_telemetry.ambient_temperature_c}°C` : 'Pending'}</span>
+                <span>Current: {sources?.operational_telemetry?.motor_current_a != null ? `${sources.operational_telemetry.motor_current_a} A` : 'Pending'}</span>
               </div>
             </div>
           </div>
 
           <div className="text-[11px] text-slate-400 border-t border-slate-100 pt-2 flex justify-between">
-            <span>Health Score: {sources?.vibration_dsp_evidence?.health_score || 96}/100</span>
+            <span>Health Score: {sources?.vibration_dsp_evidence?.health_score != null ? `${sources.vibration_dsp_evidence.health_score}/100` : 'N/A'}</span>
             <span className="text-emerald-600 font-semibold">Integrity Verified</span>
           </div>
         </div>
@@ -338,11 +355,13 @@ export const JointPassport: React.FC = () => {
               <div className="text-[10px] font-bold text-slate-400 uppercase">Observed Degradation Rate</div>
               <div className="text-2xl font-black text-slate-900 mt-0.5 flex items-center justify-center gap-1.5">
                 <TrendingDown className="w-5 h-5 text-emerald-600" />
-                <span>{degradation?.rate_g_per_rev ? `${degradation.rate_g_per_rev.toFixed(6)}` : '0.000042'}</span>
-                <span className="text-xs font-semibold text-slate-400">g/rev</span>
+                <span>{degradation?.rate_g_per_rev != null ? `${degradation.rate_g_per_rev.toFixed(6)}` : 'Awaiting data'}</span>
+                {degradation?.rate_g_per_rev != null && <span className="text-xs font-semibold text-slate-400">g/rev</span>}
               </div>
               <div className="text-[10px] text-slate-500 mt-1 font-medium">
-                Calculated over {degradation?.revolutions_observed || 889} revolutions
+                {degradation?.revolutions_observed
+                  ? `Calculated over ${degradation.revolutions_observed} revolutions`
+                  : 'Insufficient revolutions observed'}
               </div>
             </div>
 

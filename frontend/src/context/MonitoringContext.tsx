@@ -280,19 +280,26 @@ export const MonitoringProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
             if (passport.evidence_sources.operational_telemetry) {
               const op = passport.evidence_sources.operational_telemetry;
-              newTelemetry.temperature = op.bearing_temperature_c;
-              if (op.motor_current_a) {
+              if (op.bearing_temperature_c != null) {
+                newTelemetry.temperature = op.bearing_temperature_c;
+              } else if (op.ambient_temperature_c != null) {
+                newTelemetry.temperature = op.ambient_temperature_c;
+              }
+              if (op.motor_current_a != null) {
                 newTelemetry.load = Number(((op.motor_current_a / 200.0) * 100).toFixed(1));
+              }
+              if (op.drive_rpm != null) {
+                newTelemetry.rpm = op.drive_rpm;
+              }
+              if (op.pretension_n != null) {
+                newTelemetry.tension = op.pretension_n;
               }
             }
 
             if (passport.evidence_sources.ml_anomaly_evidence?.operating_regime) {
               const regime = passport.evidence_sources.ml_anomaly_evidence.operating_regime;
-              newTelemetry.rpm = regime.speed_rpm;
-              newTelemetry.tension = regime.pretension_n;
-            } else {
-              newTelemetry.rpm = 1200;
-              newTelemetry.tension = 110;
+              if (regime.speed_rpm != null) newTelemetry.rpm = regime.speed_rpm;
+              if (regime.pretension_n != null) newTelemetry.tension = regime.pretension_n;
             }
 
             newTelemetry.tracking_offset_mm = 3.2;

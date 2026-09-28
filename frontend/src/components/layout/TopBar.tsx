@@ -5,17 +5,26 @@
  * Cobalt Blue header (#0052cc / #0047ba) with search bar, shortcuts, and operator profile.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { audioAlert } from '../../lib/audioAlert';
 import {
   Search,
   Maximize2,
   LogOut,
-  Radio
+  Radio,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 
 export const TopBar: React.FC = () => {
   const { user, logout } = useAuth();
+  const [isMuted, setIsMuted] = useState<boolean>(audioAlert.getMuted());
+
+  const handleToggleMute = () => {
+    const nextMuted = audioAlert.toggleMute();
+    setIsMuted(nextMuted);
+  };
 
   const handleToggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -60,6 +69,14 @@ export const TopBar: React.FC = () => {
         <div className="font-bold tracking-wide uppercase text-white">
           HI, {user?.name || 'ADMIN'}
         </div>
+
+        <button
+          onClick={handleToggleMute}
+          title={isMuted ? "Unmute SCADA Audio Alerts" : "Mute SCADA Audio Alerts"}
+          className="p-1 text-blue-100 hover:text-white transition-colors cursor-pointer"
+        >
+          {isMuted ? <VolumeX className="w-4 h-4 text-amber-300" /> : <Volume2 className="w-4 h-4" />}
+        </button>
 
         <button
           onClick={handleToggleFullscreen}

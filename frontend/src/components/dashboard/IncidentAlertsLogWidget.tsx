@@ -38,9 +38,9 @@ export const IncidentAlertsLogWidget: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-2 pt-1">
-          {unackAlerts.slice(0, 3).map((alert) => (
+          {unackAlerts.slice(0, 3).map((alert, idx) => (
             <div
-              key={alert.id}
+              key={alert.id ? `${alert.id}-${idx}` : `alert-${idx}`}
               className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200/70 text-xs"
             >
               <div className="flex items-center gap-3">

@@ -98,10 +98,17 @@ export interface JointPassportResponse {
       max_confidence?: number;
     };
     operational_telemetry: {
-      belt_speed_mps?: number;
-      motor_current_a?: number;
-      ambient_temperature_c?: number;
-      bearing_temperature_c?: number;
+      belt_speed_mps?: number | null;
+      belt_speed_mps_status?: string;
+      motor_current_a?: number | null;
+      motor_current_a_status?: string;
+      ambient_temperature_c?: number | null;
+      ambient_temperature_c_status?: string;
+      bearing_temperature_c?: number | null;
+      drive_rpm?: number | null;
+      drive_rpm_status?: string;
+      pretension_n?: number | null;
+      pretension_n_status?: string;
       status: string;
     };
   };

@@ -127,6 +127,14 @@ class SerialAcquisitionWorker:
                         except Exception as h_err:
                             logger.error(f"Health pipeline error for serial burst {burst.id}: {h_err}")
 
+                        # Trigger optical camera capture on joint passage if enabled
+                        if burst.joint_id and settings.CAMERA_AUTO_TRIGGER_ON_JOINT:
+                            try:
+                                from .camera_service import camera_service
+                                camera_service.trigger_joint_capture(joint_code=burst.joint_id, db=db)
+                            except Exception as c_err:
+                                logger.warning(f"Camera trigger on joint {burst.joint_id} failed: {c_err}")
+
                     except Exception as e:
                         self.errors_count += 1
                         logger.error(f"Failed to persist serial telemetry packet: {e}")

@@ -20,9 +20,11 @@
 #include "MPU6050Driver.h"
 
 // ── Hardware Pin Configuration ─────────────────────────────────────────────
+// VSPI Bus: GPIO 18=SCK, GPIO 19=MISO, GPIO 23=MOSI, GPIO 5=CS (ADXL345)
+// Tachometer and Joint Trigger use SEPARATE pins to avoid SPI bus sharing conflicts.
 #define PIN_ADXL_CS          5       // ADXL345 Chip Select (VSPI CS)
-#define PIN_TACHO_INTERRUPT  18      // Hall-effect / Optical Tachometer Pulse (Active LOW)
-#define PIN_JOINT_TRIGGER    19      // Physical Joint Passage Trigger (Active LOW)
+#define PIN_TACHO_INTERRUPT   4      // Hall-effect Tachometer Pulse (GPIO 4, falling edge, pull-up)
+#define PIN_JOINT_TRIGGER    15      // Joint Passage Trigger (GPIO 15, falling edge, pull-up)
 #define PIN_LED_HEARTBEAT    2       // Onboard status LED
 
 // ── Acquisition Constants ──────────────────────────────────────────────────

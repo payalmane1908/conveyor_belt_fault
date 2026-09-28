@@ -17,7 +17,8 @@ import {
   Eye,
   ThermometerSnowflake,
   TrendingUp,
-  Boxes
+  Boxes,
+  ShieldCheck
 } from 'lucide-react';
 import { useMonitoring } from '../../context/MonitoringContext';
 
@@ -45,6 +46,7 @@ export const Sidebar: React.FC = () => {
       badge: unackAlertCount > 0 ? String(unackAlertCount) : undefined,
       badgeType: 'count'
     },
+    { to: '/evidence', label: 'Evidence Vault', icon: ShieldCheck },
     { to: '/settings', label: 'Plant Settings', icon: Settings }
   ];
 

@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     SERIAL_TIMEOUT_SECONDS: float = 1.0
     SERIAL_WORKER_ENABLED: bool = False  # Disabled by default until physical serial port connected
 
+    # Live Camera & Optical Inspection Settings
+    CAMERA_DEVICE_INDEX: int = 0
+    CAMERA_ENABLED: bool = False
+    CAMERA_AUTO_TRIGGER_ON_JOINT: bool = True
+
     # Sensor & Trigger Calibration Defaults
     DEFAULT_SAMPLING_RATE_HZ: float = 1000.0
     DEFAULT_TRIGGER_OFFSET_METERS: float = 0.50  # Distance from RFID/Hall sensor to accelerometer

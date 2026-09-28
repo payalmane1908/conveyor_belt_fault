@@ -2,8 +2,8 @@ import json
 import uuid
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status, Query, WebSocket, WebSocketDisconnect, UploadFile, File, Form
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, status, Query, WebSocket, WebSocketDisconnect, UploadFile, File, Form, Request
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
@@ -17,6 +17,7 @@ from .ml_service import vibration_anomaly_engine
 from .serial_worker import serial_worker
 from .joint_lifecycle_service import joint_lifecycle_service
 from .historical_replay_service import historical_replay_engine
+from .camera_service import camera_service
 
 router = APIRouter(prefix=settings.API_V1_STR)
 ws_router = APIRouter()
@@ -778,7 +779,19 @@ def get_joint_passport(joint_id: str, db: Session = Depends(get_db)):
         .order_by(desc(models.JointObservation.timestamp_utc))
         .first()
     )
-    ml_evidence = vibration_anomaly_engine.get_joint_passport_evidence(latest_obs)
+
+    # Extract real operating context from latest observation (if available from hardware/replay)
+    real_drive_rpm      = getattr(latest_obs, "drive_rpm", None) if latest_obs else None
+    real_belt_speed_mps = getattr(latest_obs, "belt_speed_mps", None) if latest_obs else None
+    real_motor_current  = getattr(latest_obs, "motor_current_a", None) if latest_obs else None
+    real_ambient_temp   = getattr(latest_obs, "ambient_temperature_c", None) if latest_obs else None
+    real_pretension_n   = getattr(latest_obs, "pretension_n", None) if latest_obs else None
+
+    ml_evidence = vibration_anomaly_engine.get_joint_passport_evidence(
+        latest_obs,
+        operating_speed_rpm=real_drive_rpm,
+        pretension_n=real_pretension_n
+    )
 
     # Deterministic safety rule evaluation
     vibe_critical = joint.current_risk == "CRITICAL"
@@ -826,10 +839,18 @@ def get_joint_passport(joint_id: str, db: Session = Depends(get_db)):
                 "message": "No visual inspection frame recorded for this joint yet."
             },
             "operational_telemetry": {
-                "belt_speed_mps": 3.2,
-                "motor_current_a": 142.5,
-                "ambient_temperature_c": 28.5,
-                "bearing_temperature_c": 38.0,
+                # Values sourced from the latest JointObservation (hardware or historical replay).
+                # If None: hardware sensor not yet connected / no observation recorded yet.
+                "belt_speed_mps": real_belt_speed_mps,
+                "belt_speed_mps_status": "LIVE" if real_belt_speed_mps is not None else "PLACEHOLDER — tachometer not yet wired",
+                "motor_current_a": real_motor_current,
+                "motor_current_a_status": "LIVE" if real_motor_current is not None else "PLACEHOLDER — current sensor not wired",
+                "ambient_temperature_c": real_ambient_temp,
+                "ambient_temperature_c_status": "LIVE" if real_ambient_temp is not None else "PLACEHOLDER — thermal sensor not wired",
+                "drive_rpm": real_drive_rpm,
+                "drive_rpm_status": "LIVE" if real_drive_rpm is not None else "PLACEHOLDER — tachometer not yet wired",
+                "pretension_n": real_pretension_n,
+                "pretension_n_status": "LIVE" if real_pretension_n is not None else "PLACEHOLDER — load cell not installed",
                 "status": "NORMAL"
             }
         },
@@ -1043,7 +1064,7 @@ async def analyze_vision_frame(
     camera_id: str = Query("CAM-SPLICE-01"),
     joint_code: Optional[str] = Query(None),
     source_type: str = Query("RESEARCH_DATASET"),
-    conf_threshold: float = Query(0.10),
+    conf_threshold: float = Query(0.25),
     db: Session = Depends(get_db)
 ):
     """
@@ -1166,6 +1187,15 @@ async def analyze_vision_frame(
 
         # Broadcast correlated HEALTH_UPDATE so SCADA condition card updates immediately
         health_score = 28.0 if alert_sev == "CRITICAL" else 64.0
+        latest_obs_rec = (
+            db.query(models.JointObservation)
+            .filter(models.JointObservation.joint_id == target_joint_id)
+            .order_by(desc(models.JointObservation.timestamp_utc))
+            .first()
+        )
+        live_rpm = getattr(latest_obs_rec, "drive_rpm", None)
+        live_tension = getattr(latest_obs_rec, "pretension_n", None)
+
         await ws_manager.broadcast_json({
             "type": "HEALTH_UPDATE",
             "joint_id": target_joint_id,
@@ -1173,8 +1203,8 @@ async def analyze_vision_frame(
             "health_score": health_score,
             "risk_state": alert_sev,
             "overall_status": alert_sev,
-            "rpm": 1200,
-            "tension": 110,
+            "rpm": live_rpm,
+            "tension": live_tension,
             "data_provenance": "HISTORICAL" if source_type == "RESEARCH_DATASET" else "LIVE",
             "explanation": f"Optical inspection confirmed surface defect: {analysis_res['primary_damage_type']} ({analysis_res['total_detections']} detections flagged)."
         })
@@ -1343,6 +1373,55 @@ def get_vision_test_samples():
         "dataset_split": "test",
         "samples": test_imgs[:30]
     }
+
+@router.get("/vision/camera/status", tags=["Vision & Optical Monitoring"])
+def get_camera_status():
+    """Returns physical camera availability, device index, and capture statistics."""
+    return camera_service.get_status()
+
+@router.get("/vision/camera/stream", tags=["Vision & Optical Monitoring"])
+def get_camera_stream():
+    """Streams continuous multipart MJPEG video from the optical inspection camera."""
+    return StreamingResponse(
+        camera_service.generate_mjpeg_stream(),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+@router.post("/vision/camera/capture", tags=["Vision & Optical Monitoring"])
+async def trigger_camera_capture(
+    request: Request,
+    joint_code: Optional[str] = Query(None),
+    camera_id: Optional[str] = Query(None),
+    conf_threshold: Optional[float] = Query(None),
+    test_image_name: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Triggers an on-demand frame capture and YOLOv8 inference:
+    - If physical USB camera is available, captures real frame from device index.
+    - If physical camera is unavailable or test_image_name is specified, uses benchmark test sample.
+    - Persists VisionObservation, updates joint health, and broadcasts over WebSocket.
+    """
+    body_data = {}
+    try:
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            body_data = await request.json()
+    except Exception:
+        body_data = {}
+
+    resolved_joint_code = joint_code or body_data.get("joint_code") or "J-01"
+    resolved_camera_id = camera_id or body_data.get("camera_id") or "CAM-SPLICE-01"
+    resolved_conf = conf_threshold if conf_threshold is not None else body_data.get("conf_threshold", 0.25)
+    resolved_test_image = test_image_name or body_data.get("test_image_name")
+
+    return camera_service.trigger_joint_capture(
+        joint_code=resolved_joint_code,
+        camera_id=resolved_camera_id,
+        conf_threshold=resolved_conf,
+        test_image_name=resolved_test_image,
+        db=db
+    )
 
 @router.get("/vision/frame/{observation_id}", tags=["Vision & Optical Monitoring"])
 def get_analyzed_frame_image(observation_id: str):

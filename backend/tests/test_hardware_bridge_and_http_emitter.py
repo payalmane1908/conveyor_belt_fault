@@ -8,13 +8,27 @@ Verifies:
 4. Missing serial hardware triggers SENSOR NOT CONNECTED gracefully without fabricated data.
 """
 
+import sys
 import unittest
 import json
 from unittest.mock import patch, MagicMock
+from pathlib import Path
 from fastapi.testclient import TestClient
 
-from backend.main import app
-from backend.app.schemas import DataProvenance
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+try:
+    from backend.main import app
+    from backend.app.schemas import DataProvenance
+except ModuleNotFoundError:
+    from main import app
+    from app.schemas import DataProvenance
+
 from edge.virtual_serial_emitter import generate_burst_samples, get_backend_sequence
 from edge.hardware_bridge import run_hardware_bridge, list_available_ports
 

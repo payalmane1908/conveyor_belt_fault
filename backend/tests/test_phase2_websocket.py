@@ -164,7 +164,13 @@ class TestPhase2WebSocketAndSCADA(unittest.TestCase):
         with TestClient(app) as client:
             root_res = client.get("/")
             self.assertEqual(root_res.status_code, 200)
-            self.assertIn("Conveyor Belt Joint Telemetry SCADA", root_res.text)
+            # Accept either the React SPA title (production build) or the legacy
+            # static HMI title, whichever is currently mounted.
+            self.assertTrue(
+                "CONVEYOR SCADA" in root_res.text or
+                "Conveyor Belt Joint Telemetry SCADA" in root_res.text,
+                "Root / must serve a SCADA index.html (React build or legacy static HMI)"
+            )
 
             # API still reachable
             api_res = client.get("/api/v1/system/status")

@@ -201,6 +201,40 @@ class ApiService {
     return this.request<VisionEngineStatus>('/api/v1/vision/status');
   }
 
+  async getCameraStatus(): Promise<{
+    hardware_camera_available: boolean;
+    device_index: number;
+    camera_enabled: boolean;
+    auto_trigger_on_joint: boolean;
+    last_capture_utc: string | null;
+    total_captures: number;
+    last_observation_id: string | null;
+    mode: string;
+  }> {
+    return this.request('/api/v1/vision/camera/status');
+  }
+
+  getCameraStreamUrl(): string {
+    return this.resolveMediaUrl('/api/v1/vision/camera/stream');
+  }
+
+  async triggerCameraCapture(params?: {
+    joint_code?: string;
+    camera_id?: string;
+    conf_threshold?: number;
+    test_image_name?: string;
+  }): Promise<any> {
+    const q = new URLSearchParams();
+    if (params?.joint_code) q.append('joint_code', params.joint_code);
+    if (params?.camera_id) q.append('camera_id', params.camera_id);
+    if (params?.conf_threshold) q.append('conf_threshold', String(params.conf_threshold));
+    if (params?.test_image_name) q.append('test_image_name', params.test_image_name);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return this.request(`/api/v1/vision/camera/capture${qs}`, {
+      method: 'POST'
+    });
+  }
+
   async getVisionTestSamples(): Promise<{ total_test_samples: number; dataset_split: string; samples: string[] }> {
     return this.request('/api/v1/vision/test-samples');
   }

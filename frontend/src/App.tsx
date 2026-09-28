@@ -13,6 +13,7 @@ import { JointPassport } from './pages/JointPassport';
 import { SensorAnalytics } from './pages/SensorAnalytics';
 import { AIDiagnosis } from './pages/AIDiagnosis';
 import { Alerts } from './pages/Alerts';
+import { Evidence } from './pages/Evidence';
 import { SettingsPage } from './pages/Settings';
 
 // Route guard component
@@ -37,7 +38,7 @@ export const App: React.FC = () => {
               <Route path="joint-passport" element={<JointPassport />} />
               <Route path="sensor-analytics" element={<SensorAnalytics />} />
               <Route path="ai-diagnosis" element={<AIDiagnosis />} />
-              <Route path="evidence" element={<Navigate to="/control-room" replace />} />
+              <Route path="evidence" element={<Evidence />} />
               <Route path="alerts" element={<Alerts />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>

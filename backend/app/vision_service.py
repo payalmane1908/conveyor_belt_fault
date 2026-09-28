@@ -184,17 +184,36 @@ class VisionEngine:
         detections = []
         annotated_img = img.copy()
 
+        # Check for operator / human presence to prevent false-positive defect labeling on human faces
+        faces = []
+        try:
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if img.ndim == 3 else img
+            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+            if not face_cascade.empty():
+                faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(50, 50))
+        except Exception:
+            faces = []
+
+        def is_in_face_region(bx1: int, by1: int, w_box: int, h_box: int) -> bool:
+            cx = bx1 + w_box / 2
+            cy = by1 + h_box / 2
+            for (fx, fy, fw, fh) in faces:
+                if (fx - 20) <= cx <= (fx + fw + 20) and (fy - 20) <= cy <= (fy + fh + 20):
+                    return True
+            return False
+
+        # Highlight detected operator faces as non-inspection zones
+        for (fx, fy, fw, fh) in faces:
+            cv2.rectangle(annotated_img, (fx, fy), (fx + fw, fy + fh), (160, 160, 160), 1)
+            cv2.putText(annotated_img, "OPERATOR / NON-CONVEYOR ZONE", (fx, max(14, fy - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (160, 160, 160), 1)
+
         # 2. Check model status & run detection
         if self._model is not None and self.model_status == "TRAINED_MODEL":
             # Run actual YOLO inference at 416 training resolution
-            effective_conf = min(conf_threshold, 0.10)
+            # Use requested conf_threshold (default 0.25) while face-detector rejects facial regions
+            effective_conf = max(0.20, float(conf_threshold))
             results = self._model.predict(img, conf=effective_conf, imgsz=416, verbose=False)
             res = results[0]
-
-            # If no detections at effective_conf, try sensitive scan at conf=0.05 for custom uploaded frames
-            if len(res.boxes) == 0:
-                results = self._model.predict(img, conf=0.05, imgsz=416, verbose=False)
-                res = results[0]
 
             for box in res.boxes:
                 bx1, by1, bx2, by2 = [int(v) for v in box.xyxy[0]]
@@ -205,6 +224,10 @@ class VisionEngine:
 
                 w_box = bx2 - bx1
                 h_box = by2 - by1
+
+                # Suppress false positives on human face regions
+                if is_in_face_region(bx1, by1, w_box, h_box):
+                    continue
 
                 detections.append({
                     "class_name": cls_name,
@@ -220,22 +243,6 @@ class VisionEngine:
                 (tw, th), _ = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
                 cv2.rectangle(annotated_img, (bx1, max(0, by1 - th - 6)), (bx1 + tw + 4, max(th + 6, by1)), col, -1)
                 cv2.putText(annotated_img, label_text, (bx1 + 2, max(th + 2, by1 - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
-
-            # Fallback: if zero YOLO detections above threshold, check for significant edge tear gradient
-            if len(detections) == 0:
-                baseline_res = BaselineCVAnalyzer.analyze_surface(img)
-                for cand in baseline_res.get("candidates", []):
-                    if cand.get("area_px", 0) > 150:
-                        x, y, w, h = cand["bbox"]
-                        detections.append({
-                            "class_name": "damage",
-                            "class_id": 0,
-                            "confidence": 0.45,
-                            "bbox": [x, y, w, h],
-                            "area_px": cand["area_px"]
-                        })
-                        cv2.rectangle(annotated_img, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                        cv2.putText(annotated_img, "SURFACE ANOMALY", (x, max(12, y - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
 
         else:
             # Run classical CV baseline
